@@ -870,11 +870,7 @@ function ForestRiver() {
     const tick = (t) => {
       setNow(t);
 
-      setWorldOffset((prev) => {
-        const next = prev + SCROLL_SPEED;
-        if (next >= WORLD_END) { setStatus("won"); return WORLD_END; }
-        return next;
-      });
+      setWorldOffset((prev) => prev + SCROLL_SPEED);
 
       setBoatX((prev) => {
         const dx = (keysRef.current.right ? 1 : 0) - (keysRef.current.left ? 1 : 0);
@@ -899,6 +895,12 @@ function ForestRiver() {
     return () => cancelAnimationFrame(raf);
   }, [status]);
 
+  // Win when boat reaches the far (right) bank
+  useEffect(() => {
+    if (status !== "playing") return;
+    if (boatX >= BOAT_X_BOUNDS[1] - 5) setStatus("won");
+  }, [boatX, status]);
+
   // Collision check on each render
   useEffect(() => {
     if (status !== "playing") return;
@@ -920,7 +922,7 @@ function ForestRiver() {
   }, [boatX, boatY, worldOffset, now, status]);
 
   const flashing = (now - lastHitRef.current) < FLASH_MS;
-  const progress = worldOffset / WORLD_END;
+  const progress = (boatX - BOAT_X_BOUNDS[0]) / (BOAT_X_BOUNDS[1] - BOAT_X_BOUNDS[0]);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden" }}>
