@@ -888,33 +888,37 @@ const UNIT_DEFS = [
   { id: "c-mar2",   faction: "confederate", role: "soldier",    x: 1780, y: 978, scale: 3.4, pose: "march", facing: -1, delay: 0.1 },
 ];
 const STARTING_HP = 3;
+const PUNCH_RANGE = 110;
+const PUNCH_COOLDOWN = 280;
+const ENEMY_PUNCH_COOLDOWN = 700;
+const PLAYER_SPEED = 4;
+const ENEMY_SPEED = 2;
+const X_BOUNDS = [60, 1860];
 
-function Unit({ def, hp, isDead, isSelected, isTargetable, onClick, p }) {
+function Unit({ def, x, hp, isDead, ringColor, p }) {
   const visual = (() => {
-    if (def.role === "flagbearer") return <FlagBearer x={def.x} y={def.y} scale={def.scale} faction={def.faction} p={p} />;
-    if (def.role === "lincoln") return <Lincoln x={def.x} y={def.y} scale={def.scale} p={p} />;
-    if (def.role === "grant") return <Grant x={def.x} y={def.y} scale={def.scale} p={p} />;
-    return <Soldier x={def.x} y={def.y} scale={def.scale} faction={def.faction} pose={def.pose || "march"} facing={def.facing || 1} delay={def.delay || 0} p={p} />;
+    if (def.role === "flagbearer") return <FlagBearer x={x} y={def.y} scale={def.scale} faction={def.faction} p={p} />;
+    if (def.role === "lincoln") return <Lincoln x={x} y={def.y} scale={def.scale} p={p} />;
+    if (def.role === "grant") return <Grant x={x} y={def.y} scale={def.scale} p={p} />;
+    return <Soldier x={x} y={def.y} scale={def.scale} faction={def.faction} pose={def.pose || "march"} facing={def.facing || 1} delay={def.delay || 0} p={p} />;
   })();
 
   if (isDead) {
     return <g style={{ opacity: 0.18, pointerEvents: "none" }}>{visual}</g>;
   }
 
-  const ringColor = isSelected ? "#ffd84a" : isTargetable ? "#ff6a3a" : null;
   const ringW = 36 + def.scale * 4;
   const hpColor = def.faction === "union" ? "#5a8ad8" : "#d8a868";
 
   return (
-    <g style={{ cursor: onClick ? "pointer" : "default" }} onClick={onClick || undefined}>
-      <rect x={def.x - 30} y={def.y - 90} width={60} height={148} fill="transparent" pointerEvents="all" />
+    <g pointerEvents="none">
       {ringColor && (
-        <ellipse cx={def.x} cy={def.y + 48} rx={ringW} ry={6} fill="none" stroke={ringColor} strokeWidth="3" opacity="0.85" pointerEvents="none">
+        <ellipse cx={x} cy={def.y + 48} rx={ringW} ry={6} fill="none" stroke={ringColor} strokeWidth="3" opacity="0.85">
           <animate attributeName="opacity" values="0.5;1;0.5" dur="1.2s" repeatCount="indefinite" />
         </ellipse>
       )}
       {visual}
-      <g transform={`translate(${def.x}, ${def.y - 78})`} pointerEvents="none">
+      <g transform={`translate(${x}, ${def.y - 78})`}>
         {[0, 1, 2].map((i) => (
           <rect key={i} x={-13 + i * 9} y={0} width={7} height={4} rx={1}
             fill={i < hp ? hpColor : "#1a1a1a"} stroke="#000" strokeWidth="0.6" opacity="0.95" />
@@ -924,15 +928,16 @@ function Unit({ def, hp, isDead, isSelected, isTargetable, onClick, p }) {
   );
 }
 
-function Soldiers({ p, units, selected, attackable, getClickHandler }) {
+function Soldiers({ p, units, playerActiveId, enemyActiveId }) {
   const renderUnit = (def) => {
     const u = units[def.id];
     const isDead = u.hp <= 0;
+    const ringColor = isDead ? null
+      : def.id === playerActiveId ? "#ffd84a"
+      : def.id === enemyActiveId ? "#ff6a3a"
+      : null;
     return (
-      <Unit key={def.id} def={def} hp={u.hp} isDead={isDead}
-        isSelected={selected === def.id}
-        isTargetable={attackable.includes(def.id)}
-        onClick={isDead ? null : getClickHandler(def.id)} p={p} />
+      <Unit key={def.id} def={def} x={u.x} hp={u.hp} isDead={isDead} ringColor={ringColor} p={p} />
     );
   };
   return (
@@ -1010,13 +1015,10 @@ const btnStyle = (variant) => ({
   textDecoration: "none",
 });
 
-function HUD({ playerSide, turn, status, selected, message }) {
+function HUD({ playerSide, status }) {
   const sideName = playerSide === "union" ? "Union" : "Confederate";
-  const turnText = status === "playing"
-    ? (turn === "player"
-        ? (selected ? "Click an enemy to attack" : "Your turn — pick one of your units")
-        : (message || "Enemy turn…"))
-    : "";
+  const advanceKey = playerSide === "union" ? "→" : "←";
+  const turnText = status === "playing" ? `${advanceKey} advance · ←/→ move · SPACE punch` : "";
 
   if (status === "won" || status === "lost") {
     const won = status === "won";
@@ -1068,6 +1070,20 @@ function HUD({ playerSide, turn, status, selected, message }) {
   );
 }
 
+// Front-most living unit on a side. For union, "front" means largest x (rightmost).
+// For confederate, "front" means smallest x (leftmost).
+function frontmostId(units, faction) {
+  let best = null, bestX = null;
+  UNIT_DEFS.forEach((d) => {
+    if (d.faction !== faction) return;
+    const u = units[d.id];
+    if (!u || u.hp <= 0) return;
+    if (best === null) { best = d.id; bestX = u.x; return; }
+    if (faction === "union" ? u.x > bestX : u.x < bestX) { best = d.id; bestX = u.x; }
+  });
+  return best;
+}
+
 function Battlefield() {
   const p = PALETTE;
 
@@ -1079,57 +1095,103 @@ function Battlefield() {
 
   const [units, setUnits] = useState(() => {
     const u = {};
-    UNIT_DEFS.forEach((d) => { u[d.id] = { hp: STARTING_HP }; });
+    UNIT_DEFS.forEach((d) => { u[d.id] = { hp: STARTING_HP, x: d.x }; });
     return u;
   });
-  const [turn, setTurn] = useState("player");
-  const [selected, setSelected] = useState(null);
   const [status, setStatus] = useState("playing");
-  const [message, setMessage] = useState("");
 
-  const attackable = useMemo(() => {
-    if (!selected || turn !== "player" || status !== "playing") return [];
-    return UNIT_DEFS.filter((d) => d.faction === enemySide && units[d.id].hp > 0).map((d) => d.id);
-  }, [selected, turn, status, units, enemySide]);
+  const playerActiveId = frontmostId(units, playerSide);
+  const enemyActiveId = frontmostId(units, enemySide);
 
   useEffect(() => {
     if (status !== "playing") return;
-    const playerAlive = UNIT_DEFS.some((d) => d.faction === playerSide && units[d.id].hp > 0);
-    const enemyAlive = UNIT_DEFS.some((d) => d.faction === enemySide && units[d.id].hp > 0);
-    if (!enemyAlive) setStatus("won");
-    else if (!playerAlive) setStatus("lost");
-  }, [units, playerSide, enemySide, status]);
+    if (!playerActiveId) setStatus("lost");
+    else if (!enemyActiveId) setStatus("won");
+  }, [playerActiveId, enemyActiveId, status]);
 
+  const keysRef = useRef({ left: false, right: false });
+  const lastPlayerPunchRef = useRef(0);
+  const lastEnemyPunchRef = useRef(0);
+
+  // Keyboard input
   useEffect(() => {
-    if (turn !== "enemy" || status !== "playing") return;
-    const t = setTimeout(() => {
-      const playerAlive = UNIT_DEFS.filter((d) => d.faction === playerSide && units[d.id].hp > 0);
-      if (playerAlive.length === 0) return;
-      const target = playerAlive[Math.floor(Math.random() * playerAlive.length)];
-      setUnits((prev) => ({ ...prev, [target.id]: { hp: prev[target.id].hp - 1 } }));
-      setMessage("");
-      setTurn("player");
-    }, 1100);
-    return () => clearTimeout(t);
-  }, [turn, status, playerSide]);
+    const tryPunch = () => {
+      if (status !== "playing") return;
+      const now = performance.now();
+      if (now - lastPlayerPunchRef.current < PUNCH_COOLDOWN) return;
+      setUnits((prev) => {
+        const pid = frontmostId(prev, playerSide);
+        const eid = frontmostId(prev, enemySide);
+        if (!pid || !eid) return prev;
+        // Find closest enemy to player active (in case enemy ranks are scrambled)
+        let target = null, targetDist = Infinity;
+        UNIT_DEFS.forEach((d) => {
+          if (d.faction !== enemySide) return;
+          if (prev[d.id].hp <= 0) return;
+          const dist = Math.abs(prev[d.id].x - prev[pid].x);
+          if (dist < targetDist) { target = d.id; targetDist = dist; }
+        });
+        if (!target || targetDist > PUNCH_RANGE) return prev;
+        lastPlayerPunchRef.current = now;
+        return { ...prev, [target]: { ...prev[target], hp: prev[target].hp - 1 } };
+      });
+    };
 
-  const getClickHandler = (id) => {
-    if (status !== "playing" || turn !== "player") return null;
-    const def = UNIT_DEFS.find((d) => d.id === id);
-    if (!def) return null;
-    if (def.faction === playerSide) {
-      return () => setSelected((prev) => (prev === id ? null : id));
-    }
-    if (selected) {
-      return () => {
-        setUnits((prev) => ({ ...prev, [id]: { hp: prev[id].hp - 1 } }));
-        setSelected(null);
-        setMessage("Enemy turn…");
-        setTurn("enemy");
-      };
-    }
-    return null;
-  };
+    const onDown = (e) => {
+      if (e.key === "ArrowLeft") { keysRef.current.left = true; e.preventDefault(); }
+      else if (e.key === "ArrowRight") { keysRef.current.right = true; e.preventDefault(); }
+      else if (e.key === " " || e.code === "Space") { tryPunch(); e.preventDefault(); }
+    };
+    const onUp = (e) => {
+      if (e.key === "ArrowLeft") keysRef.current.left = false;
+      else if (e.key === "ArrowRight") keysRef.current.right = false;
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, [status, playerSide, enemySide]);
+
+  // Animation loop: continuous movement + enemy AI
+  useEffect(() => {
+    if (status !== "playing") return;
+    let raf;
+    const tick = (now) => {
+      setUnits((prev) => {
+        const pid = frontmostId(prev, playerSide);
+        const eid = frontmostId(prev, enemySide);
+        if (!pid || !eid) return prev;
+
+        const next = { ...prev };
+
+        // Player movement (continuous while key held)
+        const dx = (keysRef.current.right ? 1 : 0) - (keysRef.current.left ? 1 : 0);
+        if (dx !== 0) {
+          const newX = Math.max(X_BOUNDS[0], Math.min(X_BOUNDS[1], prev[pid].x + dx * PLAYER_SPEED));
+          next[pid] = { ...prev[pid], x: newX };
+        }
+
+        // Enemy AI: walk frontmost toward player, punch when in range
+        const dist = next[eid].x - next[pid].x;
+        const absDist = Math.abs(dist);
+        if (absDist > PUNCH_RANGE) {
+          const step = dist > 0 ? -ENEMY_SPEED : ENEMY_SPEED;
+          const newX = Math.max(X_BOUNDS[0], Math.min(X_BOUNDS[1], next[eid].x + step));
+          next[eid] = { ...next[eid], x: newX };
+        } else if (now - lastEnemyPunchRef.current > ENEMY_PUNCH_COOLDOWN) {
+          lastEnemyPunchRef.current = now;
+          next[pid] = { ...next[pid], hp: next[pid].hp - 1 };
+        }
+
+        return next;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [status, playerSide, enemySide]);
 
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   useEffect(() => {
@@ -1175,7 +1237,7 @@ function Battlefield() {
         </g>
 
         <g style={{ transform: `translate(${parallax.x * -38}px, ${parallax.y * -12}px)` }}>
-          <Soldiers p={p} units={units} selected={selected} attackable={attackable} getClickHandler={getClickHandler} />
+          <Soldiers p={p} units={units} playerActiveId={playerActiveId} enemyActiveId={enemyActiveId} />
         </g>
 
         <g style={{ transform: `translate(${parallax.x * -80}px, ${parallax.y * -18}px)`, pointerEvents: "none" }}>
@@ -1190,7 +1252,7 @@ function Battlefield() {
         <Overlay />
       </svg>
 
-      <HUD playerSide={playerSide} turn={turn} status={status} selected={selected} message={message} />
+      <HUD playerSide={playerSide} status={status} />
     </div>
   );
 }
