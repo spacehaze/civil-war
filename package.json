@@ -1,0 +1,7 @@
+{
+  "name": "civil-war",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based Civil War game — three animated SVG scenes (river, battlefield, slave grounds). Game logic WIP.",
+  "license": "UNLICENSED"
+}

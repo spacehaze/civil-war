@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Slave Grounds — Northbound</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; font-family: Georgia, "Times New Roman", serif; }
+  #root { width: 100vw; height: 100vh; }
+
+  @keyframes nightCloudDrift {
+    0%   { transform: translateX(-300px); }
+    100% { transform: translateX(2400px); }
+  }
+  @keyframes treeSway {
+    0%, 100% { transform: rotate(-0.6deg); }
+    50%      { transform: rotate(0.6deg); }
+  }
+  @keyframes fogDrift {
+    0%   { transform: translateX(-200px); }
+    100% { transform: translateX(200px); }
+  }
+  @keyframes legSwing {
+    0%, 100% { transform: rotate(-12deg); }
+    50%      { transform: rotate(12deg); }
+  }
+  @keyframes armSwing {
+    0%, 100% { transform: rotate(10deg); }
+    50%      { transform: rotate(-10deg); }
+  }
+  @keyframes armSwingChild {
+    0%, 100% { transform: rotate(8deg); }
+    50%      { transform: rotate(-8deg); }
+  }
+  @keyframes figureWalk0 {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.5px); }
+  }
+  @keyframes figureWalk1 {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.2px); }
+  }
+  @keyframes figureWalk2 {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.8px); }
+  }
+  @keyframes figureIdle {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-0.4px); }
+  }
+  @keyframes lanternSway {
+    0%, 100% { transform: rotate(-3deg); }
+    50%      { transform: rotate(3deg); }
+  }
+  @keyframes firefly0 {
+    0%, 100% { transform: translate(0, 0); }
+    25%      { transform: translate(20px, -14px); }
+    50%      { transform: translate(40px, 6px); }
+    75%      { transform: translate(14px, 20px); }
+  }
+  @keyframes firefly1 {
+    0%, 100% { transform: translate(0, 0); }
+    33%      { transform: translate(-18px, -20px); }
+    66%      { transform: translate(22px, 12px); }
+  }
+  @keyframes firefly2 {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(30px, -28px); }
+  }
+  @keyframes firefly3 {
+    0%, 100% { transform: translate(0, 0); }
+    25%      { transform: translate(-24px, 8px); }
+    75%      { transform: translate(16px, -18px); }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+const PALETTE = {
+  skyTop: "#0a0e1f",
+  skyMid: "#141a32",
+  skyHorizon: "#1a2240",
+  moonCore: "#f4ecd0",
+  moonHalo: "#dcd0a0",
+  moonShadow: "#7a7050",
+  star: "#ffeed0",
+  cloud: "#1a2240",
+  cloudHi: "#2a3550",
+  forestFar: "#0a1020",
+  forestMid: "#0e1830",
+  forestNear: "#060a18",
+  trunkSil: "#040714",
+  canopySil: "#080d1a",
+  ground: "#0a1018",
+  groundHi: "#1a2230",
+  pathHi: "#3a4258",
+  stone: "#2a3040",
+  stoneHi: "#3a4258",
+  stoneShade: "#1a1e2a",
+  grass: "#1a2438",
+  figureBody: "#020308",
+  figureRim: "#3a5070",
+  lantern: "#ffc850",
+  lanternHalo: "#ffa030",
+  fog: "#9aa4b8",
+};
+
+const VIEW_W = 1920;
+const VIEW_H = 1080;
+const WORLD_W = 1920 * 4;
+const GROUND_Y = 880;
+
+const MOON_BRIGHTNESS = 1;
+const FOG_DENSITY = 0.55;
+const SHOW_NORTH_STAR = true;
+const SHOW_FIREFLIES = true;
+const SHOW_FOG = true;
+const AUTO_SCROLL = true;
+const SCROLL_SPEED = 30;
+const FIGURE_COUNT = 5;
+
+function Defs({ p }) {
+  return (
+    <defs>
+      <linearGradient id="skyGrad3" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={p.skyTop} />
+        <stop offset="65%" stopColor={p.skyMid} />
+        <stop offset="100%" stopColor={p.skyHorizon} />
+      </linearGradient>
+      <radialGradient id="moonHalo" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0%" stopColor={p.moonHalo} stopOpacity="0.55" />
+        <stop offset="60%" stopColor={p.moonHalo} stopOpacity="0.15" />
+        <stop offset="100%" stopColor={p.moonHalo} stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="moonGlow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0%" stopColor={p.moonCore} stopOpacity="0.25" />
+        <stop offset="100%" stopColor={p.moonCore} stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="lanternGlow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0%" stopColor={p.lantern} stopOpacity="0.95" />
+        <stop offset="40%" stopColor={p.lanternHalo} stopOpacity="0.5" />
+        <stop offset="100%" stopColor={p.lanternHalo} stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="starGlow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0%" stopColor={p.star} stopOpacity="1" />
+        <stop offset="60%" stopColor={p.star} stopOpacity="0.3" />
+        <stop offset="100%" stopColor={p.star} stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={p.groundHi} />
+        <stop offset="100%" stopColor={p.ground} />
+      </linearGradient>
+      <linearGradient id="forestGrad3" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={p.forestMid} />
+        <stop offset="100%" stopColor={p.forestNear} />
+      </linearGradient>
+      <linearGradient id="fogGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={p.fog} stopOpacity="0" />
+        <stop offset="50%" stopColor={p.fog} stopOpacity="0.18" />
+        <stop offset="100%" stopColor={p.fog} stopOpacity="0.04" />
+      </linearGradient>
+      <radialGradient id="vignette3" cx="0.5" cy="0.5" r="0.8">
+        <stop offset="60%" stopColor="#000" stopOpacity="0" />
+        <stop offset="100%" stopColor="#000" stopOpacity="0.6" />
+      </radialGradient>
+      <filter id="grain3">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" />
+        <feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.6  0 0 0 0.10 0" />
+        <feComposite in2="SourceGraphic" operator="in" />
+      </filter>
+      <filter id="softBlur3"><feGaussianBlur stdDeviation="3" /></filter>
+    </defs>
+  );
+}
+
+function Sky({ p, moonX, moonY, brightness }) {
+  return (
+    <g>
+      <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#skyGrad3)" />
+      <circle cx={moonX} cy={moonY} r="240" fill="url(#moonGlow)" />
+      <circle cx={moonX} cy={moonY} r="160" fill="url(#moonHalo)" />
+      <circle cx={moonX} cy={moonY} r="78" fill={p.moonCore} opacity={0.95 * brightness} />
+      <circle cx={moonX} cy={moonY} r="78" fill="#fff" opacity={0.25 * brightness} />
+      <circle cx={moonX - 22} cy={moonY - 14} r="9" fill={p.moonShadow} opacity="0.35" />
+      <circle cx={moonX + 18} cy={moonY + 10} r="6" fill={p.moonShadow} opacity="0.3" />
+      <circle cx={moonX + 8} cy={moonY - 28} r="5" fill={p.moonShadow} opacity="0.3" />
+      <circle cx={moonX - 30} cy={moonY + 20} r="4" fill={p.moonShadow} opacity="0.25" />
+      <circle cx={moonX + 32} cy={moonY - 18} r="3" fill={p.moonShadow} opacity="0.3" />
+    </g>
+  );
+}
+
+function Stars({ p, showNorthStar }) {
+  const stars = useMemo(() => {
+    const arr = [];
+    let s = 1;
+    const rng = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    for (let i = 0; i < 140; i++) {
+      arr.push({
+        x: rng() * VIEW_W,
+        y: rng() * 600,
+        r: rng() * 1.4 + 0.3,
+        o: rng() * 0.6 + 0.3,
+        tw: 2 + rng() * 5,
+        delay: rng() * 4,
+      });
+    }
+    return arr;
+  }, []);
+  return (
+    <g>
+      {stars.map((st, i) => (
+        <circle key={i} cx={st.x} cy={st.y} r={st.r} fill={p.star} opacity={st.o}>
+          <animate attributeName="opacity" values={`${st.o};${st.o*0.3};${st.o}`} dur={`${st.tw}s`} repeatCount="indefinite" begin={`${st.delay}s`} />
+        </circle>
+      ))}
+      {showNorthStar && (
+        <g>
+          <circle cx="1200" cy="180" r="40" fill="url(#starGlow)" />
+          <circle cx="1200" cy="180" r="22" fill="url(#starGlow)" opacity="0.7" />
+          <g>
+            <line x1="1200" y1="160" x2="1200" y2="200" stroke={p.star} strokeWidth="1.2" opacity="0.85" />
+            <line x1="1180" y1="180" x2="1220" y2="180" stroke={p.star} strokeWidth="1.2" opacity="0.85" />
+            <line x1="1186" y1="166" x2="1214" y2="194" stroke={p.star} strokeWidth="0.6" opacity="0.6" />
+            <line x1="1214" y1="166" x2="1186" y2="194" stroke={p.star} strokeWidth="0.6" opacity="0.6" />
+          </g>
+          <circle cx="1200" cy="180" r="3.4" fill="#fff">
+            <animate attributeName="r" values="3.4;4.2;3.4" dur="3.5s" repeatCount="indefinite" />
+          </circle>
+        </g>
+      )}
+    </g>
+  );
+}
+
+function Clouds({ p }) {
+  const clouds = [
+    { x: 200, y: 240, s: 1.0, dur: 140, delay: 0, op: 0.5 },
+    { x: 900, y: 200, s: 1.4, dur: 180, delay: 30, op: 0.4 },
+    { x: 1500, y: 280, s: 0.9, dur: 160, delay: 60, op: 0.55 },
+    { x: 1750, y: 180, s: 1.1, dur: 200, delay: 90, op: 0.35 },
+  ];
+  return (
+    <g>
+      {clouds.map((c, i) => (
+        <g key={i} style={{ animation: `nightCloudDrift ${c.dur}s linear ${c.delay}s infinite` }}>
+          <g transform={`translate(${c.x},${c.y}) scale(${c.s})`} opacity={c.op}>
+            <ellipse cx="-50" cy="6" rx="60" ry="16" fill={p.cloud} />
+            <ellipse cx="-10" cy="-4" rx="54" ry="22" fill={p.cloudHi} />
+            <ellipse cx="40" cy="0" rx="68" ry="22" fill={p.cloudHi} />
+            <ellipse cx="80" cy="6" rx="42" ry="14" fill={p.cloud} />
+            <ellipse cx="20" cy="-14" rx="38" ry="16" fill={p.cloudHi} />
+          </g>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function DistantRidges({ p }) {
+  let path1 = `M0,${GROUND_Y - 80}`;
+  for (let x = 0; x <= WORLD_W; x += 60) {
+    const h = (GROUND_Y - 80) - (Math.sin(x / 220) * 14 + Math.sin(x / 90 + 2) * 8 + 18);
+    path1 += ` L${x},${h}`;
+  }
+  path1 += ` L${WORLD_W},${GROUND_Y} L0,${GROUND_Y} Z`;
+
+  let path2 = `M0,${GROUND_Y - 50}`;
+  for (let x = 0; x <= WORLD_W; x += 50) {
+    const h = (GROUND_Y - 50) - (Math.sin(x / 160 + 1) * 22 + Math.sin(x / 70) * 10 + 12);
+    path2 += ` L${x},${h}`;
+  }
+  path2 += ` L${WORLD_W},${GROUND_Y} L0,${GROUND_Y} Z`;
+  return (
+    <g>
+      <path d={path1} fill={p.forestFar} opacity="0.85" />
+      <path d={path2} fill={p.forestMid} opacity="0.95" />
+    </g>
+  );
+}
+
+function MidForestSil({ p, seed = 1 }) {
+  const trees = useMemo(() => {
+    const arr = [];
+    let s = seed * 17;
+    const rng = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    for (let x = 0; x < WORLD_W; x += 38 + rng() * 30) {
+      const kind = rng() > 0.55 ? "oak" : "pine";
+      const h = 120 + rng() * 100;
+      const w = 40 + rng() * 40;
+      arr.push({ x, h, w, kind, sway: rng() * 4 });
+    }
+    return arr;
+  }, [seed]);
+  return (
+    <g>
+      {trees.map((t, i) => (
+        <g key={i} transform={`translate(${t.x},${GROUND_Y})`} style={{ transformOrigin: `${t.x}px ${GROUND_Y}px`, animation: `treeSway 9s ease-in-out ${t.sway}s infinite` }}>
+          {t.kind === "pine" ? (
+            <g>
+              <rect x="-3" y={-t.h * 0.3} width="6" height={t.h * 0.3} fill={p.trunkSil} />
+              <path d={`M0,${-t.h} L${-t.w/2},${-t.h*0.3} L${t.w/2},${-t.h*0.3} Z`} fill={p.canopySil} />
+              <path d={`M0,${-t.h*0.85} L${-t.w/2.4},${-t.h*0.45} L${t.w/2.4},${-t.h*0.45} Z`} fill={p.canopySil} />
+              <path d={`M0,${-t.h*0.68} L${-t.w/3},${-t.h*0.3} L${t.w/3},${-t.h*0.3} Z`} fill={p.canopySil} />
+            </g>
+          ) : (
+            <g>
+              <rect x="-4" y={-t.h * 0.45} width="8" height={t.h * 0.45} fill={p.trunkSil} />
+              <ellipse cx="0" cy={-t.h * 0.7} rx={t.w * 0.55} ry={t.h * 0.32} fill={p.canopySil} />
+              <ellipse cx={-t.w * 0.25} cy={-t.h * 0.55} rx={t.w * 0.32} ry={t.h * 0.22} fill={p.canopySil} />
+              <ellipse cx={t.w * 0.28} cy={-t.h * 0.6} rx={t.w * 0.3} ry={t.h * 0.22} fill={p.canopySil} />
+              <ellipse cx="0" cy={-t.h * 0.85} rx={t.w * 0.4} ry={t.h * 0.2} fill={p.canopySil} />
+            </g>
+          )}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function WallSegment({ x, len, h, p }) {
+  const stones = useMemo(() => {
+    const arr = [];
+    let s = (x | 0) + 1;
+    const rng = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    const courses = 3;
+    for (let c = 0; c < courses; c++) {
+      let cx = 0;
+      const cy = -10 - c * Math.floor(h / courses);
+      while (cx < len) {
+        const w = 22 + rng() * 28;
+        const sh = (h / courses) - 2 - rng() * 6;
+        if (rng() > 0.06) {
+          arr.push({ cx: cx + w / 2, cy, w, h: sh, r: rng() * 0.4 - 0.2 });
+        }
+        cx += w + 1;
+      }
+    }
+    return arr;
+  }, [x, len, h]);
+
+  return (
+    <g transform={`translate(${x},${GROUND_Y})`}>
+      <ellipse cx={len / 2} cy="2" rx={len / 2} ry="6" fill="#000" opacity="0.5" />
+      {stones.map((st, i) => (
+        <g key={i} transform={`translate(${st.cx},${st.cy}) rotate(${st.r * 8})`}>
+          <rect x={-st.w / 2} y={-st.h / 2} width={st.w} height={st.h} rx="3" ry="3" fill={p.stone} />
+          <rect x={-st.w / 2} y={-st.h / 2} width={st.w} height={st.h * 0.4} rx="2" ry="2" fill={p.stoneHi} opacity="0.4" />
+          <rect x={-st.w / 2} y={st.h * 0.1} width={st.w} height={st.h * 0.4} rx="2" ry="2" fill={p.stoneShade} opacity="0.4" />
+          <line x1={-st.w / 2} y1={-st.h / 2} x2={st.w / 2} y2={-st.h / 2} stroke={p.stoneShade} strokeWidth="0.6" opacity="0.7" />
+        </g>
+      ))}
+      {stones.filter((_, i) => i % 5 === 0).slice(0, 6).map((st, i) => (
+        <g key={`m${i}`} transform={`translate(${st.cx},${st.cy - st.h/2})`}>
+          <ellipse cx="0" cy="-1" rx="6" ry="2" fill={p.grass} opacity="0.7" />
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function StoneWalls({ p }) {
+  const segments = [
+    { x: 480, len: 320, h: 64 },
+    { x: 1240, len: 220, h: 56 },
+    { x: 2080, len: 380, h: 70 },
+    { x: 3000, len: 260, h: 60 },
+    { x: 3720, len: 340, h: 66 },
+    { x: 4520, len: 280, h: 58 },
+    { x: 5440, len: 360, h: 70 },
+    { x: 6300, len: 240, h: 60 },
+    { x: 7060, len: 320, h: 64 },
+  ];
+  return (
+    <g>
+      {segments.map((seg, si) => <WallSegment key={si} {...seg} p={p} />)}
+    </g>
+  );
+}
+
+function ForegroundTrees({ p }) {
+  const trunks = useMemo(() => {
+    const arr = [];
+    let s = 9;
+    const rng = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    for (let x = -100; x < WORLD_W + 100; x += 220 + rng() * 380) {
+      arr.push({ x, h: 700 + rng() * 200, w: 28 + rng() * 22, sway: rng() * 5, lean: (rng() - 0.5) * 8 });
+    }
+    return arr;
+  }, []);
+  return (
+    <g>
+      {trunks.map((t, i) => (
+        <g key={i} transform={`translate(${t.x},${GROUND_Y + 8})`} style={{ transformOrigin: `${t.x}px ${GROUND_Y + 8}px`, animation: `treeSway 11s ease-in-out ${t.sway}s infinite` }}>
+          <path d={`M${-t.w/2},0 Q${-t.w/2 - 4 + t.lean},${-t.h/2} ${-t.w/3 + t.lean},${-t.h} L${t.w/3 + t.lean},${-t.h} Q${t.w/2 + 4 + t.lean},${-t.h/2} ${t.w/2},0 Z`} fill={p.trunkSil} />
+          <ellipse cx={t.lean} cy={-t.h} rx={t.w * 4} ry={t.h * 0.18} fill={p.canopySil} opacity="0.95" />
+          <ellipse cx={t.lean - t.w} cy={-t.h - t.h * 0.05} rx={t.w * 2.5} ry={t.h * 0.12} fill={p.canopySil} />
+          <ellipse cx={t.lean + t.w} cy={-t.h - t.h * 0.04} rx={t.w * 2.5} ry={t.h * 0.13} fill={p.canopySil} />
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function Fireflies({ count = 30 }) {
+  const flies = useMemo(() => {
+    const arr = [];
+    let s = 5;
+    const rng = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    for (let i = 0; i < count; i++) {
+      arr.push({
+        x: rng() * WORLD_W,
+        y: GROUND_Y - 80 - rng() * 220,
+        r: 1.2 + rng() * 1.4,
+        dur: 4 + rng() * 6,
+        delay: rng() * 8,
+      });
+    }
+    return arr;
+  }, [count]);
+  return (
+    <g>
+      {flies.map((f, i) => (
+        <g key={i} style={{ animation: `firefly${i % 4} ${f.dur}s ease-in-out ${f.delay}s infinite` }}>
+          <circle cx={f.x} cy={f.y} r={f.r * 4} fill="#d4ff90" opacity="0.12" />
+          <circle cx={f.x} cy={f.y} r={f.r} fill="#eaffb0">
+            <animate attributeName="opacity" values="0.2;1;0.2" dur={`${f.dur * 0.4}s`} repeatCount="indefinite" begin={`${f.delay}s`} />
+          </circle>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function GroundLayer({ p }) {
+  let path = `M0,${GROUND_Y}`;
+  for (let x = 0; x <= WORLD_W; x += 80) {
+    const y = GROUND_Y + Math.sin(x / 280) * 4;
+    path += ` L${x},${y}`;
+  }
+  path += ` L${WORLD_W},${VIEW_H} L0,${VIEW_H} Z`;
+
+  let pathHi = `M0,${GROUND_Y + 8}`;
+  for (let x = 0; x <= WORLD_W; x += 60) {
+    const y = GROUND_Y + 10 + Math.sin(x / 240) * 4;
+    pathHi += ` L${x},${y}`;
+  }
+  return (
+    <g>
+      <path d={path} fill="url(#groundGrad)" />
+      <path d={pathHi} stroke={p.pathHi} strokeWidth="22" fill="none" opacity="0.18" strokeLinecap="round" />
+      <path d={pathHi} stroke={p.pathHi} strokeWidth="6" fill="none" opacity="0.35" strokeLinecap="round" />
+      <g stroke={p.grass} strokeWidth="2" fill="none" opacity="0.7">
+        {Array.from({ length: 280 }).map((_, i) => {
+          const x = (i * 73) % WORLD_W;
+          const y = GROUND_Y + 14 + (i * 11) % 80;
+          return <path key={i} d={`M${x},${y} L${x-2},${y-7} M${x},${y} L${x+2},${y-8}`} />;
+        })}
+      </g>
+      <g fill={p.stoneShade} opacity="0.7">
+        {Array.from({ length: 60 }).map((_, i) => {
+          const x = (i * 137 + 50) % WORLD_W;
+          const y = GROUND_Y + 30 + (i * 17) % 60;
+          const r = 4 + (i % 3);
+          return <ellipse key={i} cx={x} cy={y} rx={r} ry={r * 0.4} />;
+        })}
+      </g>
+    </g>
+  );
+}
+
+function FigureAdult({ p }) {
+  return (
+    <g fill={p.figureBody}>
+      <g style={{ transformOrigin: "0px -20px", animation: "legSwing 1.2s ease-in-out infinite" }}>
+        <rect x="-6" y="-22" width="5" height="22" rx="2" />
+      </g>
+      <g style={{ transformOrigin: "0px -20px", animation: "legSwing 1.2s ease-in-out 0.6s infinite" }}>
+        <rect x="1" y="-22" width="5" height="22" rx="2" />
+      </g>
+      <path d="M-12,-50 Q-14,-30 -14,-22 L-10,-20 L-8,-23 L-5,-20 L-3,-23 L0,-20 L3,-23 L6,-20 L8,-23 L10,-20 L14,-22 Q14,-30 12,-50 Z" />
+      <path d="M-2,-30 L-4,-22" stroke={p.figureRim} strokeWidth="0.6" opacity="0.5" />
+      <g style={{ transformOrigin: "-10px -50px", animation: "armSwing 1.2s ease-in-out 0.6s infinite" }}>
+        <rect x="-13" y="-50" width="4" height="22" rx="2" />
+      </g>
+      <g style={{ transformOrigin: "10px -50px", animation: "armSwing 1.2s ease-in-out infinite" }}>
+        <rect x="9" y="-50" width="4" height="22" rx="2" />
+        <ellipse cx="11" cy="-26" rx="6" ry="5" />
+        <path d="M11,-31 L11,-34 L13,-32 L11,-31" />
+      </g>
+      <rect x="-9" y="-54" width="18" height="6" rx="2" />
+      <circle cx="0" cy="-62" r="7" />
+      <path d="M-9,-66 Q0,-72 9,-66 Q9,-64 0,-64 Q-9,-64 -9,-66 Z" />
+      <path d="M9,-58 Q12,-54 12,-48" stroke={p.figureRim} strokeWidth="0.8" fill="none" opacity="0.5" />
+      <path d="M-7,-66 Q-3,-69 0,-69" stroke={p.figureRim} strokeWidth="0.6" fill="none" opacity="0.4" />
+    </g>
+  );
+}
+
+function FigureWoman({ p }) {
+  return (
+    <g fill={p.figureBody}>
+      <g style={{ transformOrigin: "0px -20px", animation: "legSwing 1.4s ease-in-out infinite" }}>
+        <rect x="-3" y="-20" width="3" height="20" rx="1.5" />
+      </g>
+      <g style={{ transformOrigin: "0px -20px", animation: "legSwing 1.4s ease-in-out 0.7s infinite" }}>
+        <rect x="0" y="-20" width="3" height="20" rx="1.5" />
+      </g>
+      <path d="M-14,-50 Q-18,-30 -18,-20 L-14,-18 L-12,-21 L-9,-18 L-6,-21 L-3,-18 L0,-21 L3,-18 L6,-21 L9,-18 L12,-21 L14,-18 L18,-20 Q18,-30 14,-50 Z" />
+      <path d="M-13,-58 Q-16,-50 -14,-44 L14,-44 Q16,-50 13,-58 Z" />
+      <g style={{ transformOrigin: "-10px -52px", animation: "armSwing 1.4s ease-in-out 0.7s infinite" }}>
+        <rect x="-12" y="-52" width="3.5" height="20" rx="2" />
+      </g>
+      <g style={{ transformOrigin: "10px -52px", animation: "armSwing 1.4s ease-in-out infinite" }}>
+        <rect x="8.5" y="-52" width="3.5" height="20" rx="2" />
+      </g>
+      <circle cx="0" cy="-62" r="6.5" />
+      <path d="M-8,-66 Q0,-72 8,-66 Q9,-62 7,-58 L-7,-58 Q-9,-62 -8,-66 Z" />
+      <path d="M5,-58 Q9,-54 8,-48" />
+      <path d="M-7,-66 Q-3,-69 0,-69" stroke={p.figureRim} strokeWidth="0.6" fill="none" opacity="0.5" />
+      <path d="M-14,-44 Q-12,-50 -10,-52" stroke={p.figureRim} strokeWidth="0.6" fill="none" opacity="0.4" />
+    </g>
+  );
+}
+
+function FigureChild({ p }) {
+  return (
+    <g fill={p.figureBody}>
+      <g style={{ transformOrigin: "0px -14px", animation: "legSwing 1s ease-in-out infinite" }}>
+        <rect x="-3" y="-14" width="3" height="14" rx="1.5" />
+      </g>
+      <g style={{ transformOrigin: "0px -14px", animation: "legSwing 1s ease-in-out 0.5s infinite" }}>
+        <rect x="0" y="-14" width="3" height="14" rx="1.5" />
+      </g>
+      <path d="M-9,-36 Q-10,-18 -10,-14 L-7,-13 L-4,-15 L-1,-13 L2,-15 L5,-13 L8,-15 L10,-14 Q10,-18 9,-36 Z" />
+      <g style={{ transformOrigin: "-7px -38px", animation: "armSwingChild 1s ease-in-out 0.5s infinite" }}>
+        <rect x="-9" y="-38" width="3" height="16" rx="1.5" />
+      </g>
+      <g style={{ transformOrigin: "7px -38px" }}>
+        <rect x="6" y="-50" width="3" height="14" rx="1.5" transform="rotate(-30 7 -38)" />
+      </g>
+      <circle cx="0" cy="-44" r="5.5" />
+      <path d="M-6,-47 Q0,-51 6,-47 Q6,-45 0,-45 Q-6,-45 -6,-47 Z" />
+      <path d="M-5,-47 Q-2,-49 0,-49" stroke={p.figureRim} strokeWidth="0.5" fill="none" opacity="0.5" />
+    </g>
+  );
+}
+
+function FigureLantern({ p }) {
+  return (
+    <g>
+      <g fill={p.figureBody}>
+        <g style={{ transformOrigin: "0px -20px", animation: "legSwing 1.2s ease-in-out infinite" }}>
+          <rect x="-6" y="-22" width="5" height="22" rx="2" />
+        </g>
+        <g style={{ transformOrigin: "0px -20px", animation: "legSwing 1.2s ease-in-out 0.6s infinite" }}>
+          <rect x="1" y="-22" width="5" height="22" rx="2" />
+        </g>
+        <path d="M-12,-50 Q-13,-30 -13,-22 L13,-22 Q13,-30 12,-50 Z" />
+        <g style={{ transformOrigin: "-10px -50px", animation: "armSwing 1.2s ease-in-out 0.6s infinite" }}>
+          <rect x="-13" y="-50" width="4" height="22" rx="2" />
+        </g>
+        <rect x="9" y="-50" width="4" height="14" rx="2" />
+        <rect x="11" y="-38" width="2" height="10" />
+        <rect x="-9" y="-54" width="18" height="6" rx="2" />
+        <circle cx="0" cy="-62" r="7" />
+        <path d="M-9,-66 Q0,-72 9,-66 Q9,-64 0,-64 Q-9,-64 -9,-66 Z" />
+      </g>
+      <g style={{ animation: "lanternSway 2.2s ease-in-out infinite", transformOrigin: "12px -30px" }}>
+        <circle cx="12" cy="-22" r="44" fill="url(#lanternGlow)" opacity="0.85" />
+        <circle cx="12" cy="-22" r="22" fill="url(#lanternGlow)" />
+        <rect x="8" y="-30" width="8" height="12" rx="1" fill="#1a1208" />
+        <rect x="9" y="-29" width="6" height="10" fill={p.lantern} opacity="0.95" />
+        <rect x="9.6" y="-28" width="4.8" height="2" fill="#fff8d0" opacity="0.8" />
+        <rect x="7.4" y="-31" width="9.2" height="1.4" rx="0.5" fill="#1a1208" />
+        <rect x="11.2" y="-34" width="1.6" height="4" fill="#1a1208" />
+        <path d="M9.5,-34 Q12,-37 14.5,-34" stroke="#1a1208" strokeWidth="1" fill="none" />
+      </g>
+      <path d="M9,-58 Q12,-54 12,-48" stroke={p.figureRim} strokeWidth="0.8" fill="none" opacity="0.6" />
+    </g>
+  );
+}
+
+function FigureLeader({ p }) {
+  return (
+    <g fill={p.figureBody}>
+      <ellipse cx="0" cy="2" rx="14" ry="3" fill="#000" opacity="0.6" />
+      <rect x="-6" y="-22" width="5" height="22" rx="2" />
+      <rect x="1" y="-22" width="5" height="22" rx="2" />
+      <path d="M-13,-52 Q-15,-32 -14,-22 L14,-22 Q15,-32 13,-52 Z" />
+      <path d="M-13,-56 Q-16,-48 -14,-42 L14,-42 Q16,-48 13,-56 Z" />
+      <rect x="9" y="-72" width="3.5" height="22" rx="2" transform="rotate(-35 11 -52)" />
+      <rect x="-13" y="-52" width="3.5" height="20" rx="2" />
+      <rect x="-9" y="-56" width="18" height="6" rx="2" />
+      <circle cx="0" cy="-64" r="7" />
+      <path d="M-8,-69 Q0,-74 8,-69 Q9,-65 7,-60 L-7,-60 Q-9,-65 -8,-69 Z" />
+      <path d="M-7,-69 Q-3,-72 0,-72" stroke={p.figureRim} strokeWidth="0.7" fill="none" opacity="0.6" />
+      <path d="M11,-72 Q14,-72 16,-70" stroke={p.figureRim} strokeWidth="0.7" fill="none" opacity="0.6" />
+    </g>
+  );
+}
+
+function Figure({ x, y, scale = 1, kind = "adult", facing = 1, p, walking = true, delay = 0 }) {
+  const flip = facing > 0 ? 1 : -1;
+  const animName = walking ? `figureWalk${(delay * 7) % 3 | 0}` : "figureIdle";
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale * flip}, ${scale})`} style={{ animation: `${animName} 1.2s ease-in-out ${delay}s infinite` }}>
+      <ellipse cx="0" cy="2" rx="14" ry="3" fill="#000" opacity="0.6" />
+      {kind === "adult" && <FigureAdult p={p} />}
+      {kind === "woman" && <FigureWoman p={p} />}
+      {kind === "child" && <FigureChild p={p} />}
+      {kind === "lantern" && <FigureLantern p={p} />}
+      {kind === "leader" && <FigureLeader p={p} />}
+    </g>
+  );
+}
+
+function Fog({ density = 0.6 }) {
+  const bands = [
+    { y: GROUND_Y - 50, h: 80, dur: 60, op: 0.35 },
+    { y: GROUND_Y - 20, h: 120, dur: 90, op: 0.45 },
+    { y: GROUND_Y + 20, h: 140, dur: 75, op: 0.5 },
+  ];
+  return (
+    <g opacity={density}>
+      {bands.map((b, i) => (
+        <g key={i} style={{ animation: `fogDrift ${b.dur}s linear infinite`, animationDelay: `${i * 4}s` }}>
+          <ellipse cx="0" cy={b.y} rx={WORLD_W} ry={b.h} fill="url(#fogGrad)" opacity={b.op} filter="url(#softBlur3)" />
+          <ellipse cx={WORLD_W} cy={b.y - 20} rx={WORLD_W * 0.7} ry={b.h * 0.8} fill="url(#fogGrad)" opacity={b.op * 0.7} filter="url(#softBlur3)" />
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function SlaveGrounds() {
+  const p = PALETTE;
+  const [cam, setCam] = useState(0);
+  const camRef = useRef(0);
+  const dragRef = useRef({ active: false, startX: 0, startCam: 0 });
+
+  useEffect(() => {
+    let raf;
+    let last = performance.now();
+    const tick = (now) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      camRef.current += SCROLL_SPEED * dt;
+      if (camRef.current > WORLD_W - VIEW_W) camRef.current = 0;
+      setCam(camRef.current);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    const onDown = (e) => {
+      dragRef.current = { active: true, startX: e.clientX || e.touches?.[0]?.clientX || 0, startCam: camRef.current };
+    };
+    const onMove = (e) => {
+      if (!dragRef.current.active) return;
+      const x = e.clientX || e.touches?.[0]?.clientX || 0;
+      const dx = (dragRef.current.startX - x) * (WORLD_W / window.innerWidth);
+      let nc = dragRef.current.startCam + dx;
+      nc = Math.max(0, Math.min(WORLD_W - VIEW_W, nc));
+      camRef.current = nc;
+      setCam(nc);
+    };
+    const onUp = () => { dragRef.current.active = false; };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchstart", onDown);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchstart", onDown);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, []);
+
+  const figures = useMemo(() => {
+    const all = [
+      { worldX: 600,  kind: "lantern", scale: 2.2, delay: 0,   walking: true },
+      { worldX: 720,  kind: "adult",   scale: 2.0, delay: 0.3, walking: true },
+      { worldX: 840,  kind: "woman",   scale: 2.0, delay: 0.1, walking: true },
+      { worldX: 920,  kind: "child",   scale: 1.7, delay: 0.5, walking: true },
+      { worldX: 1820, kind: "leader",  scale: 2.2, delay: 0,   walking: false },
+      { worldX: 2900, kind: "adult",   scale: 2.0, delay: 0.4, walking: true },
+      { worldX: 2980, kind: "woman",   scale: 2.0, delay: 0.2, walking: true },
+      { worldX: 4400, kind: "lantern", scale: 2.0, delay: 0.6, walking: true },
+      { worldX: 4500, kind: "adult",   scale: 2.0, delay: 0.0, walking: true },
+      { worldX: 4580, kind: "child",   scale: 1.7, delay: 0.5, walking: true },
+      { worldX: 5800, kind: "woman",   scale: 2.0, delay: 0.3, walking: true },
+      { worldX: 5880, kind: "child",   scale: 1.6, delay: 0.7, walking: true },
+      { worldX: 6900, kind: "adult",   scale: 2.0, delay: 0.2, walking: true },
+      { worldX: 7200, kind: "lantern", scale: 2.0, delay: 0.4, walking: true },
+    ];
+    return all.slice(0, Math.min(all.length, 4 + FIGURE_COUNT));
+  }, []);
+
+  const moonX = 380;
+  const moonY = 220;
+  const camFar = cam * 0.05;
+  const camMid = cam * 0.35;
+  const camNear = cam * 0.75;
+  const camFront = cam * 1.0;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden", cursor: "grab", userSelect: "none" }}>
+      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid slice" style={{ width: "100%", height: "100%", display: "block" }}>
+        <Defs p={p} />
+
+        <Sky p={p} moonX={moonX} moonY={moonY} brightness={MOON_BRIGHTNESS} />
+        <Stars p={p} showNorthStar={SHOW_NORTH_STAR} />
+
+        <g transform={`translate(${-cam * 0.08}, 0)`}>
+          <Clouds p={p} />
+        </g>
+
+        <g transform={`translate(${-camFar}, 0)`}>
+          <DistantRidges p={p} />
+        </g>
+
+        <g transform={`translate(${-camMid}, 0)`}>
+          <MidForestSil p={p} seed={1} />
+        </g>
+
+        <g transform={`translate(${-camNear}, 0)`}>
+          <GroundLayer p={p} />
+          <StoneWalls p={p} />
+          <MidForestSil p={p} seed={5} />
+          {SHOW_FOG && <Fog density={FOG_DENSITY} />}
+          {figures.map((f, i) => (
+            <Figure key={i} x={f.worldX} y={GROUND_Y + 6} scale={f.scale} kind={f.kind} p={p} walking={f.walking} delay={f.delay} />
+          ))}
+          {SHOW_FIREFLIES && <Fireflies count={36} />}
+        </g>
+
+        <g transform={`translate(${-camFront}, 0)`}>
+          <ForegroundTrees p={p} />
+        </g>
+
+        <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#vignette3)" pointerEvents="none" />
+        <rect x="0" y="0" width={VIEW_W} height={VIEW_H} filter="url(#grain3)" opacity="0.35" pointerEvents="none" />
+      </svg>
+
+      <div style={{
+        position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
+        width: "min(60vw, 600px)", height: 3, background: "rgba(255,255,255,0.12)", borderRadius: 2,
+        pointerEvents: "none",
+      }}>
+        <div style={{
+          width: `${(cam / (WORLD_W - VIEW_W)) * 100}%`, height: "100%",
+          background: "rgba(244,236,208,0.7)", borderRadius: 2, transition: "width 0.1s linear",
+        }} />
+      </div>
+
+      <div style={{
+        position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)",
+        color: "rgba(244,236,208,0.55)", fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: 14, letterSpacing: "0.2em", textTransform: "uppercase", pointerEvents: "none",
+      }}>
+        Slave Grounds — Northbound, by the Star
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<SlaveGrounds />);
+  </script>
+</body>
+</html>
