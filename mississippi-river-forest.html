@@ -680,7 +680,9 @@ const FLASH_MS = 200;
 const ROCK_RADIUS = 48;
 const BOAT_RADIUS = 50;
 
-const BOAT_X = 420;                // fixed viewport x for the boat
+const BOAT_X_START = 420;          // boat starting viewport x
+const BOAT_X_BOUNDS = [120, 900];  // ←/→ keep boat within this horizontal range
+const BOAT_HSPEED = 5;             // px/frame horizontal speed
 const WATER_Y = 940;               // boat resting y (water surface)
 const JUMP_VELOCITY = -18;         // initial upward velocity (negative = up)
 const GRAVITY = 0.85;              // px/frame²
@@ -800,7 +802,7 @@ function RiverHUD({ hp, status, progress }) {
             Cross the Mississippi
           </div>
           <div style={{ fontSize: 15, marginTop: 4, fontStyle: "italic", opacity: 0.92 }}>
-            Press SPACE to jump over rocks
+            ←/→ steer · SPACE to jump over rocks
           </div>
         </div>
       </div>
@@ -825,6 +827,7 @@ function RiverHUD({ hp, status, progress }) {
 
 function ForestRiver() {
   const p = PALETTE;
+  const [boatX, setBoatX] = useState(BOAT_X_START);
   const [boatY, setBoatY] = useState(WATER_Y);
   const [hp, setHp] = useState(STARTING_HP);
   const [worldOffset, setWorldOffset] = useState(0);
@@ -832,25 +835,35 @@ function ForestRiver() {
   const [now, setNow] = useState(0);
 
   const vyRef = useRef(0);                // vertical velocity
+  const keysRef = useRef({ left: false, right: false });
   const lastHitRef = useRef(-Infinity);
 
-  // Keyboard input — SPACE jumps when on the water
+  // Keyboard input — SPACE/↑ jump when on water; ←/→ shift horizontally
   useEffect(() => {
     const onDown = (e) => {
       if (e.key === " " || e.code === "Space" || e.key === "ArrowUp") {
         e.preventDefault();
         if (status !== "playing") return;
-        // Jump only if currently on water (not airborne)
-        if (vyRef.current === 0) {
-          vyRef.current = JUMP_VELOCITY;
-        }
+        if (vyRef.current === 0) vyRef.current = JUMP_VELOCITY;
+      } else if (e.key === "ArrowLeft") {
+        keysRef.current.left = true; e.preventDefault();
+      } else if (e.key === "ArrowRight") {
+        keysRef.current.right = true; e.preventDefault();
       }
     };
+    const onUp = (e) => {
+      if (e.key === "ArrowLeft") keysRef.current.left = false;
+      else if (e.key === "ArrowRight") keysRef.current.right = false;
+    };
     window.addEventListener("keydown", onDown);
-    return () => window.removeEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
   }, [status]);
 
-  // Animation loop: scroll + jump physics
+  // Animation loop: scroll + horizontal movement + jump physics
   useEffect(() => {
     if (status !== "playing") return;
     let raf;
@@ -861,6 +874,12 @@ function ForestRiver() {
         const next = prev + SCROLL_SPEED;
         if (next >= WORLD_END) { setStatus("won"); return WORLD_END; }
         return next;
+      });
+
+      setBoatX((prev) => {
+        const dx = (keysRef.current.right ? 1 : 0) - (keysRef.current.left ? 1 : 0);
+        if (dx === 0) return prev;
+        return Math.max(BOAT_X_BOUNDS[0], Math.min(BOAT_X_BOUNDS[1], prev + dx * BOAT_HSPEED));
       });
 
       setBoatY((prev) => {
@@ -887,7 +906,7 @@ function ForestRiver() {
     for (const r of ROCKS) {
       const screenX = r.worldX - worldOffset;
       if (screenX < -200 || screenX > 2120) continue;
-      const d = Math.hypot(screenX - BOAT_X, r.y - boatY);
+      const d = Math.hypot(screenX - boatX, r.y - boatY);
       if (d < ROCK_RADIUS + BOAT_RADIUS) {
         lastHitRef.current = now;
         setHp((prev) => {
@@ -898,7 +917,7 @@ function ForestRiver() {
         return;
       }
     }
-  }, [boatY, worldOffset, now, status]);
+  }, [boatX, boatY, worldOffset, now, status]);
 
   const flashing = (now - lastHitRef.current) < FLASH_MS;
   const progress = worldOffset / WORLD_END;
@@ -925,7 +944,7 @@ function ForestRiver() {
         </g>
 
         {/* Player boat */}
-        <PlayerBoat x={BOAT_X} y={boatY} flash={flashing} />
+        <PlayerBoat x={boatX} y={boatY} flash={flashing} />
 
         {/* Bank decoration */}
         <BankRocks p={p} />
