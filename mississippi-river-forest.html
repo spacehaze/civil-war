@@ -670,47 +670,34 @@ function Overlay() {
 }
 
 // ============================================================================
-// GAME — boat crosses river, dodging rocks + jumping piranhas
+// GAME — boat sails across river, jump over rocks with SPACE
 // ============================================================================
-const WORLD_END = 6400;            // total scrolled distance to win (~35s at 3px/frame)
+const WORLD_END = 5200;            // total scrolled distance to win (~29s at 3px/frame)
 const SCROLL_SPEED = 3;            // px/frame world advance
-const BOAT_SPEED = 5;              // px/frame boat steering
-const BOAT_X_BOUNDS = [80, 1700];
-const BOAT_Y_BOUNDS = [840, 1040];
 const STARTING_HP = 5;
 const HIT_INVULN_MS = 900;
 const FLASH_MS = 200;
-const ROCK_RADIUS = 50;
-const PIRANHA_RADIUS = 26;
-const BOAT_RADIUS = 56;
+const ROCK_RADIUS = 48;
+const BOAT_RADIUS = 50;
 
-const OBSTACLES = [
-  { type: "rock", worldX: 600,  y: 920 },
-  { type: "rock", worldX: 1000, y: 1000 },
-  { type: "rock", worldX: 1300, y: 870 },
-  { type: "rock", worldX: 1700, y: 980 },
-  { type: "rock", worldX: 2100, y: 920 },
-  { type: "rock", worldX: 2500, y: 1010 },
-  { type: "rock", worldX: 2900, y: 870 },
-  { type: "rock", worldX: 3300, y: 970 },
-  { type: "rock", worldX: 3700, y: 1020 },
-  { type: "rock", worldX: 4100, y: 900 },
-  { type: "rock", worldX: 4500, y: 990 },
-  { type: "rock", worldX: 4900, y: 940 },
-  { type: "rock", worldX: 5300, y: 1000 },
-  { type: "rock", worldX: 5800, y: 880 },
-  { type: "piranha", worldX: 800,  y: 980,  period: 1400, offset: 0 },
-  { type: "piranha", worldX: 1500, y: 920,  period: 1700, offset: 500 },
-  { type: "piranha", worldX: 1900, y: 1000, period: 1300, offset: 200 },
-  { type: "piranha", worldX: 2300, y: 940,  period: 1500, offset: 800 },
-  { type: "piranha", worldX: 2700, y: 1020, period: 1600, offset: 100 },
-  { type: "piranha", worldX: 3100, y: 940,  period: 1400, offset: 600 },
-  { type: "piranha", worldX: 3500, y: 1000, period: 1700, offset: 300 },
-  { type: "piranha", worldX: 3900, y: 880,  period: 1500, offset: 900 },
-  { type: "piranha", worldX: 4300, y: 1010, period: 1300, offset: 200 },
-  { type: "piranha", worldX: 4700, y: 920,  period: 1600, offset: 700 },
-  { type: "piranha", worldX: 5100, y: 1000, period: 1400, offset: 400 },
-  { type: "piranha", worldX: 5500, y: 940,  period: 1700, offset: 0 },
+const BOAT_X = 420;                // fixed viewport x for the boat
+const WATER_Y = 940;               // boat resting y (water surface)
+const JUMP_VELOCITY = -18;         // initial upward velocity (negative = up)
+const GRAVITY = 0.85;              // px/frame²
+
+// Rocks placed every ~360-440 px so a single jump can clear one and land before the next.
+const ROCKS = [
+  { worldX: 700,  y: 960 },
+  { worldX: 1100, y: 950 },
+  { worldX: 1500, y: 970 },
+  { worldX: 1900, y: 950 },
+  { worldX: 2300, y: 960 },
+  { worldX: 2700, y: 940 },
+  { worldX: 3100, y: 970 },
+  { worldX: 3500, y: 950 },
+  { worldX: 3900, y: 960 },
+  { worldX: 4300, y: 940 },
+  { worldX: 4700, y: 970 },
 ];
 
 function PlayerBoat({ x, y, flash }) {
@@ -753,20 +740,6 @@ function JaggedRock({ x, y }) {
       <path d="M-22,-22 L-8,2 L8,-30" stroke="#2a2520" strokeWidth="1" fill="none" opacity="0.85" />
       <path d="M22,-12 L38,-26" stroke="#2a2520" strokeWidth="1" fill="none" opacity="0.6" />
       <ellipse cx="0" cy="35" rx="62" ry="3" fill="none" stroke="#e8f4fa" strokeWidth="1.2" opacity="0.7" />
-    </g>
-  );
-}
-
-function Piranha({ x, y, jumpY }) {
-  return (
-    <g transform={`translate(${x}, ${y + jumpY})`}>
-      <ellipse cx="0" cy="11" rx="22" ry="3" fill="#000" opacity="0.3" />
-      <path d="M-22,0 Q-20,-12 0,-12 Q22,-12 28,0 Q22,8 0,8 Q-20,8 -22,0 Z" fill="#c8503a" />
-      <path d="M-22,0 L-32,-7 L-32,7 Z" fill="#a04030" />
-      <path d="M-15,2 Q0,8 18,4" stroke="#e8d4b0" strokeWidth="1.6" fill="none" opacity="0.85" />
-      <circle cx="14" cy="-3" r="2.4" fill="#fff" />
-      <circle cx="14" cy="-3" r="1.4" fill="#0a0a0a" />
-      <path d="M2,1 L4,5 L6,1 L8,5 L10,1 L12,5 L14,1 L16,5 L18,1" stroke="#fff" strokeWidth="0.9" fill="none" />
     </g>
   );
 }
@@ -827,7 +800,7 @@ function RiverHUD({ hp, status, progress }) {
             Cross the Mississippi
           </div>
           <div style={{ fontSize: 15, marginTop: 4, fontStyle: "italic", opacity: 0.92 }}>
-            Arrows steer · dodge rocks &amp; piranhas
+            Press SPACE to jump over rocks
           </div>
         </div>
       </div>
@@ -852,38 +825,32 @@ function RiverHUD({ hp, status, progress }) {
 
 function ForestRiver() {
   const p = PALETTE;
-  const [boat, setBoat] = useState({ x: 200, y: 940 });
+  const [boatY, setBoatY] = useState(WATER_Y);
   const [hp, setHp] = useState(STARTING_HP);
   const [worldOffset, setWorldOffset] = useState(0);
   const [status, setStatus] = useState("playing");
   const [now, setNow] = useState(0);
 
-  const keysRef = useRef({ left: false, right: false, up: false, down: false });
+  const vyRef = useRef(0);                // vertical velocity
   const lastHitRef = useRef(-Infinity);
 
-  // Keyboard input
+  // Keyboard input — SPACE jumps when on the water
   useEffect(() => {
     const onDown = (e) => {
-      if (e.key === "ArrowLeft")  { keysRef.current.left  = true; e.preventDefault(); }
-      else if (e.key === "ArrowRight") { keysRef.current.right = true; e.preventDefault(); }
-      else if (e.key === "ArrowUp")    { keysRef.current.up    = true; e.preventDefault(); }
-      else if (e.key === "ArrowDown")  { keysRef.current.down  = true; e.preventDefault(); }
-    };
-    const onUp = (e) => {
-      if (e.key === "ArrowLeft")  keysRef.current.left  = false;
-      else if (e.key === "ArrowRight") keysRef.current.right = false;
-      else if (e.key === "ArrowUp")    keysRef.current.up    = false;
-      else if (e.key === "ArrowDown")  keysRef.current.down  = false;
+      if (e.key === " " || e.code === "Space" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (status !== "playing") return;
+        // Jump only if currently on water (not airborne)
+        if (vyRef.current === 0) {
+          vyRef.current = JUMP_VELOCITY;
+        }
+      }
     };
     window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
-    return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-    };
-  }, []);
+    return () => window.removeEventListener("keydown", onDown);
+  }, [status]);
 
-  // Animation loop: scroll + boat motion + collision
+  // Animation loop: scroll + jump physics
   useEffect(() => {
     if (status !== "playing") return;
     let raf;
@@ -896,12 +863,15 @@ function ForestRiver() {
         return next;
       });
 
-      setBoat((prev) => {
-        const dx = (keysRef.current.right ? 1 : 0) - (keysRef.current.left ? 1 : 0);
-        const dy = (keysRef.current.down ? 1 : 0) - (keysRef.current.up ? 1 : 0);
-        const x = Math.max(BOAT_X_BOUNDS[0], Math.min(BOAT_X_BOUNDS[1], prev.x + dx * BOAT_SPEED));
-        const y = Math.max(BOAT_Y_BOUNDS[0], Math.min(BOAT_Y_BOUNDS[1], prev.y + dy * BOAT_SPEED));
-        return { x, y };
+      setBoatY((prev) => {
+        if (vyRef.current === 0 && prev >= WATER_Y) return WATER_Y;
+        let nextY = prev + vyRef.current;
+        vyRef.current = vyRef.current + GRAVITY;
+        if (nextY >= WATER_Y) {
+          nextY = WATER_Y;
+          vyRef.current = 0;
+        }
+        return nextY;
       });
 
       raf = requestAnimationFrame(tick);
@@ -914,22 +884,11 @@ function ForestRiver() {
   useEffect(() => {
     if (status !== "playing") return;
     if (now - lastHitRef.current < HIT_INVULN_MS) return;
-    for (const obs of OBSTACLES) {
-      const screenX = obs.worldX - worldOffset;
+    for (const r of ROCKS) {
+      const screenX = r.worldX - worldOffset;
       if (screenX < -200 || screenX > 2120) continue;
-      let oy = obs.y;
-      let radius;
-      if (obs.type === "piranha") {
-        const phase = ((now + obs.offset) % obs.period) / obs.period;
-        if (phase < 0.3 || phase > 0.7) continue;
-        const jumpAmt = Math.sin((phase - 0.3) * Math.PI / 0.4);
-        oy = obs.y - 32 * jumpAmt;
-        radius = PIRANHA_RADIUS;
-      } else {
-        radius = ROCK_RADIUS;
-      }
-      const d = Math.hypot(screenX - boat.x, oy - boat.y);
-      if (d < radius + BOAT_RADIUS) {
+      const d = Math.hypot(screenX - BOAT_X, r.y - boatY);
+      if (d < ROCK_RADIUS + BOAT_RADIUS) {
         lastHitRef.current = now;
         setHp((prev) => {
           const next = prev - 1;
@@ -939,7 +898,7 @@ function ForestRiver() {
         return;
       }
     }
-  }, [boat, worldOffset, now, status]);
+  }, [boatY, worldOffset, now, status]);
 
   const flashing = (now - lastHitRef.current) < FLASH_MS;
   const progress = worldOffset / WORLD_END;
@@ -956,23 +915,19 @@ function ForestRiver() {
         <Riverbank p={p} />
         <River p={p} />
 
-        {/* Game obstacles */}
+        {/* Rocks scrolling past */}
         <g>
-          {OBSTACLES.map((obs, i) => {
-            const screenX = obs.worldX - worldOffset;
+          {ROCKS.map((r, i) => {
+            const screenX = r.worldX - worldOffset;
             if (screenX < -200 || screenX > 2120) return null;
-            if (obs.type === "rock") return <JaggedRock key={i} x={screenX} y={obs.y} />;
-            const phase = ((now + obs.offset) % obs.period) / obs.period;
-            if (phase < 0.3 || phase > 0.7) return null;
-            const jumpAmt = Math.sin((phase - 0.3) * Math.PI / 0.4);
-            return <Piranha key={i} x={screenX} y={obs.y} jumpY={-32 * jumpAmt} />;
+            return <JaggedRock key={i} x={screenX} y={r.y} />;
           })}
         </g>
 
         {/* Player boat */}
-        <PlayerBoat x={boat.x} y={boat.y} flash={flashing} />
+        <PlayerBoat x={BOAT_X} y={boatY} flash={flashing} />
 
-        {/* Bank decoration (kept as scenery) */}
+        {/* Bank decoration */}
         <BankRocks p={p} />
         <Deer x={260} y={770} scale={1.4} />
         <Squirrel x={420} y={790} scale={1.3} />
