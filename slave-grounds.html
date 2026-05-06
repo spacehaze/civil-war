@@ -122,9 +122,20 @@ const FOG_DENSITY = 0.55;
 const SHOW_NORTH_STAR = true;
 const SHOW_FIREFLIES = true;
 const SHOW_FOG = true;
-const AUTO_SCROLL = true;
-const SCROLL_SPEED = 30;
 const FIGURE_COUNT = 5;
+
+// Game constants
+const PLAYER_SPEED = 6;          // px/frame in world coords
+const FREE_RANGE = 170;          // distance to interact with a cage
+const PLAYER_X_BOUNDS = [80, WORLD_W - 80];
+const CAGES = [
+  { id: 0, worldX: 1100 },
+  { id: 1, worldX: 2200 },
+  { id: 2, worldX: 3400 },
+  { id: 3, worldX: 4500 },
+  { id: 4, worldX: 5500 },
+  { id: 5, worldX: 6700 },
+];
 
 function Defs({ p }) {
   return (
@@ -640,56 +651,164 @@ function Fog({ density = 0.6 }) {
   );
 }
 
+// ============================================================================
+// CAGES — wooden posts + iron bars, captive silhouette inside
+// ============================================================================
+function Cage({ x, y, freed, candidate, p }) {
+  return (
+    <g transform={`translate(${x}, ${y})`}>
+      <ellipse cx="0" cy="6" rx="58" ry="6" fill="#000" opacity="0.7" />
+      {/* wooden frame */}
+      <rect x="-50" y="-100" width="6" height="106" fill={p.trunkSil} />
+      <rect x="44"  y="-100" width="6" height="106" fill={p.trunkSil} />
+      <rect x="-52" y="-104" width="104" height="6" fill={p.trunkSil} />
+      <rect x="-52" y="0"    width="104" height="4" fill={p.trunkSil} />
+      {/* fixed bars (left half — back of cage) */}
+      <line x1="-36" y1="-98" x2="-36" y2="0" stroke={p.figureBody} strokeWidth="2.4" />
+      <line x1="-22" y1="-98" x2="-22" y2="0" stroke={p.figureBody} strokeWidth="2.4" />
+      <line x1="-8"  y1="-98" x2="-8"  y2="0" stroke={p.figureBody} strokeWidth="2.4" />
+      {/* door bars (right half — swings open when freed) */}
+      <g style={{ transformOrigin: "44px 0px", transform: freed ? "rotate(-72deg)" : "rotate(0deg)", transition: "transform 0.6s ease" }}>
+        <line x1="6"  y1="-98" x2="6"  y2="0" stroke={p.figureBody} strokeWidth="2.4" />
+        <line x1="20" y1="-98" x2="20" y2="0" stroke={p.figureBody} strokeWidth="2.4" />
+        <line x1="34" y1="-98" x2="34" y2="0" stroke={p.figureBody} strokeWidth="2.4" />
+        <line x1="0"  y1="-50" x2="44" y2="-50" stroke={p.figureBody} strokeWidth="1.6" />
+        <line x1="0"  y1="-22" x2="44" y2="-22" stroke={p.figureBody} strokeWidth="1.6" />
+        {!freed && <circle cx="44" cy="-26" r="2.4" fill={p.figureRim} opacity="0.8" />}
+      </g>
+      {/* horizontal cross-bars on the back half */}
+      <line x1="-50" y1="-50" x2="0" y2="-50" stroke={p.figureBody} strokeWidth="1.6" />
+      <line x1="-50" y1="-22" x2="0" y2="-22" stroke={p.figureBody} strokeWidth="1.6" />
+      {/* captive inside (or freed beside) */}
+      {!freed && (
+        <g transform="translate(-22, 4) scale(1.5)">
+          <ellipse cx="0" cy="2" rx="14" ry="3" fill="#000" opacity="0.5" />
+          <FigureAdult p={p} />
+        </g>
+      )}
+      {freed && (
+        <g transform="translate(80, 6) scale(1.6)">
+          <FigureAdult p={p} />
+          {/* hopeful moonlight rim around freed figure */}
+          <circle cx="0" cy="-62" r="14" fill="none" stroke={p.lantern} strokeWidth="0.6" opacity="0.6">
+            <animate attributeName="opacity" values="0.3;0.8;0.3" dur="2.6s" repeatCount="indefinite" />
+          </circle>
+        </g>
+      )}
+      {/* ground prompt when player is in range */}
+      {candidate && !freed && (
+        <ellipse cx="0" cy="10" rx="62" ry="6" fill="none" stroke={p.lantern} strokeWidth="2.2" opacity="0.7">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="1.1s" repeatCount="indefinite" />
+        </ellipse>
+      )}
+    </g>
+  );
+}
+
+// Player character — silhouette with subtle faction-colored hat band
+function PlayerChar({ x, y, scale = 2.4, team, walking, p }) {
+  const accent = team === "union" ? "#5a8ad8" : "#d8a868";
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="2" rx="14" ry="3" fill="#000" opacity="0.7" />
+      <g fill={p.figureBody}>
+        <g style={{ transformOrigin: "0px -22px", animation: walking ? "legSwing 0.45s ease-in-out infinite" : "none" }}>
+          <rect x="-3" y="-22" width="3" height="22" rx="1.5" />
+        </g>
+        <g style={{ transformOrigin: "0px -22px", animation: walking ? "legSwing 0.45s ease-in-out 0.225s infinite" : "none" }}>
+          <rect x="0" y="-22" width="3" height="22" rx="1.5" />
+        </g>
+        <path d="M-12,-50 Q-13,-30 -13,-22 L13,-22 Q13,-30 12,-50 Z" />
+        <rect x="-9" y="-54" width="18" height="6" rx="2" />
+        <circle cx="0" cy="-62" r="7" />
+        <path d="M-9,-66 Q0,-72 9,-66 Q9,-64 0,-64 Q-9,-64 -9,-66 Z" />
+      </g>
+      {/* faction hat band */}
+      <rect x="-7" y="-66.4" width="14" height="1.2" fill={accent} opacity="0.95" />
+      {/* moonlight rim — stronger to distinguish player */}
+      <path d="M-7,-66 Q-3,-69 0,-69" stroke="#fff" strokeWidth="0.9" fill="none" opacity="0.7" />
+      <path d="M9,-58 Q12,-54 12,-48" stroke={accent} strokeWidth="1" fill="none" opacity="0.8" />
+    </g>
+  );
+}
+
 function SlaveGrounds() {
   const p = PALETTE;
-  const [cam, setCam] = useState(0);
-  const camRef = useRef(0);
-  const dragRef = useRef({ active: false, startX: 0, startCam: 0 });
+  const team = useMemo(() => {
+    try { return localStorage.getItem("civilwar.team") || "union"; }
+    catch (e) { return "union"; }
+  }, []);
 
+  const [player, setPlayer] = useState({ worldX: 400, walking: false });
+  const [cages, setCages] = useState(CAGES.map((c) => ({ ...c, freed: false })));
+  const [status, setStatus] = useState("playing");
+
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const cagesRef = useRef(cages);
+  cagesRef.current = cages;
+  const keysRef = useRef({ left: false, right: false });
+
+  // Win when all cages freed (with a small celebration delay)
   useEffect(() => {
+    if (status !== "playing") return;
+    if (cages.every((c) => c.freed)) {
+      const t = setTimeout(() => setStatus("won"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [cages, status]);
+
+  // Keyboard
+  useEffect(() => {
+    const tryFree = () => {
+      if (status !== "playing") return;
+      const px = playerRef.current.worldX;
+      let nearestId = -1, nearestDist = FREE_RANGE;
+      cagesRef.current.forEach((c) => {
+        if (c.freed) return;
+        const d = Math.abs(c.worldX - px);
+        if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
+      });
+      if (nearestId >= 0) {
+        setCages((prev) => prev.map((c) => (c.id === nearestId ? { ...c, freed: true } : c)));
+      }
+    };
+    const onDown = (e) => {
+      if (e.key === "ArrowLeft")  { keysRef.current.left  = true; e.preventDefault(); }
+      else if (e.key === "ArrowRight") { keysRef.current.right = true; e.preventDefault(); }
+      else if (e.key === " " || e.code === "Space") { tryFree(); e.preventDefault(); }
+    };
+    const onUp = (e) => {
+      if (e.key === "ArrowLeft")  keysRef.current.left  = false;
+      else if (e.key === "ArrowRight") keysRef.current.right = false;
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, [status]);
+
+  // Player movement loop
+  useEffect(() => {
+    if (status !== "playing") return;
     let raf;
-    let last = performance.now();
-    const tick = (now) => {
-      const dt = (now - last) / 1000;
-      last = now;
-      camRef.current += SCROLL_SPEED * dt;
-      if (camRef.current > WORLD_W - VIEW_W) camRef.current = 0;
-      setCam(camRef.current);
+    const tick = () => {
+      setPlayer((prev) => {
+        const dx = (keysRef.current.right ? 1 : 0) - (keysRef.current.left ? 1 : 0);
+        if (dx === 0) {
+          if (prev.walking) return { ...prev, walking: false };
+          return prev;
+        }
+        const newX = Math.max(PLAYER_X_BOUNDS[0], Math.min(PLAYER_X_BOUNDS[1], prev.worldX + dx * PLAYER_SPEED));
+        return { worldX: newX, walking: true };
+      });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
-
-  useEffect(() => {
-    const onDown = (e) => {
-      dragRef.current = { active: true, startX: e.clientX || e.touches?.[0]?.clientX || 0, startCam: camRef.current };
-    };
-    const onMove = (e) => {
-      if (!dragRef.current.active) return;
-      const x = e.clientX || e.touches?.[0]?.clientX || 0;
-      const dx = (dragRef.current.startX - x) * (WORLD_W / window.innerWidth);
-      let nc = dragRef.current.startCam + dx;
-      nc = Math.max(0, Math.min(WORLD_W - VIEW_W, nc));
-      camRef.current = nc;
-      setCam(nc);
-    };
-    const onUp = () => { dragRef.current.active = false; };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchstart", onDown);
-    window.addEventListener("touchmove", onMove);
-    window.addEventListener("touchend", onUp);
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchstart", onDown);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
-    };
-  }, []);
+  }, [status]);
 
   const figures = useMemo(() => {
     const all = [
@@ -713,13 +832,29 @@ function SlaveGrounds() {
 
   const moonX = 380;
   const moonY = 220;
-  const camFar = cam * 0.05;
-  const camMid = cam * 0.35;
-  const camNear = cam * 0.75;
+
+  // Camera follows the player, clamped to world bounds
+  const cam = Math.max(0, Math.min(WORLD_W - VIEW_W, player.worldX - VIEW_W / 2));
+  const camFar   = cam * 0.05;
+  const camMid   = cam * 0.35;
+  const camNear  = cam * 0.75;
   const camFront = cam * 1.0;
 
+  // Nearest unfreed cage in range — used to highlight + light up the prompt
+  const candidateId = useMemo(() => {
+    let nearestId = -1, nearestDist = FREE_RANGE;
+    cages.forEach((c) => {
+      if (c.freed) return;
+      const d = Math.abs(c.worldX - player.worldX);
+      if (d < nearestDist) { nearestDist = d; nearestId = c.id; }
+    });
+    return nearestId;
+  }, [cages, player.worldX]);
+
+  const freedCount = cages.filter((c) => c.freed).length;
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden", cursor: "grab", userSelect: "none" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden", userSelect: "none" }}>
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid slice" style={{ width: "100%", height: "100%", display: "block" }}>
         <Defs p={p} />
 
@@ -743,9 +878,16 @@ function SlaveGrounds() {
           <StoneWalls p={p} />
           <MidForestSil p={p} seed={5} />
           {SHOW_FOG && <Fog density={FOG_DENSITY} />}
+          {/* CAGES */}
+          {cages.map((c) => (
+            <Cage key={c.id} x={c.worldX} y={GROUND_Y + 6} freed={c.freed} candidate={c.id === candidateId} p={p} />
+          ))}
+          {/* Walking NPCs (the people of the night, going north) */}
           {figures.map((f, i) => (
             <Figure key={i} x={f.worldX} y={GROUND_Y + 6} scale={f.scale} kind={f.kind} p={p} walking={f.walking} delay={f.delay} />
           ))}
+          {/* Player */}
+          <PlayerChar x={player.worldX} y={GROUND_Y + 6} team={team} walking={player.walking} p={p} />
           {SHOW_FIREFLIES && <Fireflies count={36} />}
         </g>
 
@@ -757,38 +899,65 @@ function SlaveGrounds() {
         <rect x="0" y="0" width={VIEW_W} height={VIEW_H} filter="url(#grain3)" opacity="0.35" pointerEvents="none" />
       </svg>
 
-      <div style={{
-        position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
-        width: "min(60vw, 600px)", height: 3, background: "rgba(255,255,255,0.12)", borderRadius: 2,
-        pointerEvents: "none",
-      }}>
+      {status === "won" ? (
         <div style={{
-          width: `${(cam / (WORLD_W - VIEW_W)) * 100}%`, height: "100%",
-          background: "rgba(244,236,208,0.7)", borderRadius: 2, transition: "width 0.1s linear",
-        }} />
-      </div>
-
-      <div style={{
-        position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)",
-        color: "rgba(244,236,208,0.55)", fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: 14, letterSpacing: "0.2em", textTransform: "uppercase", pointerEvents: "none",
-      }}>
-        Slave Grounds — Northbound, by the Star
-      </div>
-
-      <div style={{
-        position: "absolute", top: 20, right: 20,
-        fontFamily: 'Georgia, "Times New Roman", serif',
-      }}>
-        <a href="/" style={{
-          padding: "10px 18px", borderRadius: 8,
-          border: "1px solid rgba(244,236,208,0.4)",
-          background: "rgba(10,14,31,0.6)",
-          color: "rgba(244,236,208,0.85)",
-          fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase",
-          textDecoration: "none",
-        }}>End — Play Again</a>
-      </div>
+          position: "absolute", inset: 0,
+          background: "rgba(8,6,10,0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+          color: "#e8d8b0", fontFamily: 'Georgia, "Times New Roman", serif',
+        }}>
+          <div style={{ textAlign: "center", maxWidth: 580, padding: 24 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.4em", textTransform: "uppercase", color: "#d4a838", marginBottom: 16 }}>
+              All Freed
+            </div>
+            <h1 style={{ fontSize: 88, fontWeight: 400, margin: "0 0 12px", lineHeight: 1 }}>Liberation</h1>
+            <p style={{ fontSize: 18, fontStyle: "italic", opacity: 0.7, margin: "0 0 32px", lineHeight: 1.5 }}>
+              They walk free, by the moon's light.
+            </p>
+            <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+              <a href="/" style={{
+                padding: "12px 22px", borderRadius: 8,
+                border: "1px solid #d4a838", background: "rgba(212,168,56,0.18)",
+                color: "#e8d8b0", fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase",
+                textDecoration: "none",
+              }}>Play Again</a>
+              <a href="/scenes" style={{
+                padding: "12px 22px", borderRadius: 8,
+                border: "1px solid rgba(232,216,176,0.3)", background: "transparent",
+                color: "#e8d8b0", fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase",
+                textDecoration: "none",
+              }}>View Scenes</a>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <React.Fragment>
+          <div style={{ position: "absolute", top: 24, left: 0, right: 0, textAlign: "center", pointerEvents: "none", fontFamily: 'Georgia, "Times New Roman", serif' }}>
+            <div style={{ display: "inline-block", padding: "10px 22px", background: "rgba(10,10,15,0.55)", border: "1px solid rgba(212,168,56,0.3)", borderRadius: 8, color: "#e8d8b0" }}>
+              <div style={{ fontSize: 10, letterSpacing: "0.35em", textTransform: "uppercase", opacity: 0.6 }}>
+                Free the Captives
+              </div>
+              <div style={{ fontSize: 15, marginTop: 4, fontStyle: "italic", opacity: 0.92 }}>
+                ←/→ walk · {candidateId !== -1 ? "SPACE to free" : "approach a cage"}
+              </div>
+            </div>
+          </div>
+          <div style={{ position: "absolute", top: 28, right: 24, fontFamily: 'Georgia, "Times New Roman", serif', color: "#e8d8b0", fontSize: 13, letterSpacing: "0.22em", pointerEvents: "none" }}>
+            <span style={{ color: "#d4a838" }}>{freedCount}</span> / {cages.length} FREED
+          </div>
+          <div style={{
+            position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
+            width: "min(60vw, 600px)", height: 3, background: "rgba(255,255,255,0.12)", borderRadius: 2,
+            pointerEvents: "none",
+          }}>
+            <div style={{
+              width: `${(player.worldX / WORLD_W) * 100}%`, height: "100%",
+              background: "rgba(244,236,208,0.7)", borderRadius: 2, transition: "width 0.06s linear",
+            }} />
+          </div>
+        </React.Fragment>
+      )}
     </div>
   );
 }
