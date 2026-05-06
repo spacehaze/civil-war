@@ -875,22 +875,73 @@ function Grant({ x, y, scale = 1, p }) {
   );
 }
 
-function Soldiers({ p }) {
+const UNIT_DEFS = [
+  { id: "u-leader", faction: "union",       role: "lincoln",    x: 290,  y: 950, scale: 5.0 },
+  { id: "u-flag",   faction: "union",       role: "flagbearer", x: 420,  y: 970, scale: 4.0 },
+  { id: "u-rifle",  faction: "union",       role: "soldier",    x: 520,  y: 974, scale: 3.8, pose: "rifle", delay: 0.2 },
+  { id: "u-mar1",   faction: "union",       role: "soldier",    x: 620,  y: 978, scale: 3.6, pose: "march", delay: 0.5 },
+  { id: "u-mar2",   faction: "union",       role: "soldier",    x: 140,  y: 978, scale: 3.4, pose: "march", delay: 0.8 },
+  { id: "c-leader", faction: "confederate", role: "grant",      x: 1630, y: 950, scale: 5.0 },
+  { id: "c-flag",   faction: "confederate", role: "flagbearer", x: 1500, y: 970, scale: 4.0 },
+  { id: "c-rifle",  faction: "confederate", role: "soldier",    x: 1400, y: 974, scale: 3.8, pose: "rifle", facing: -1, delay: 0.4 },
+  { id: "c-mar1",   faction: "confederate", role: "soldier",    x: 1300, y: 978, scale: 3.6, pose: "march", facing: -1, delay: 0.7 },
+  { id: "c-mar2",   faction: "confederate", role: "soldier",    x: 1780, y: 978, scale: 3.4, pose: "march", facing: -1, delay: 0.1 },
+];
+const STARTING_HP = 3;
+
+function Unit({ def, hp, isDead, isSelected, isTargetable, onClick, p }) {
+  const visual = (() => {
+    if (def.role === "flagbearer") return <FlagBearer x={def.x} y={def.y} scale={def.scale} faction={def.faction} p={p} />;
+    if (def.role === "lincoln") return <Lincoln x={def.x} y={def.y} scale={def.scale} p={p} />;
+    if (def.role === "grant") return <Grant x={def.x} y={def.y} scale={def.scale} p={p} />;
+    return <Soldier x={def.x} y={def.y} scale={def.scale} faction={def.faction} pose={def.pose || "march"} facing={def.facing || 1} delay={def.delay || 0} p={p} />;
+  })();
+
+  if (isDead) {
+    return <g style={{ opacity: 0.18, pointerEvents: "none" }}>{visual}</g>;
+  }
+
+  const ringColor = isSelected ? "#ffd84a" : isTargetable ? "#ff6a3a" : null;
+  const ringW = 36 + def.scale * 4;
+  const hpColor = def.faction === "union" ? "#5a8ad8" : "#d8a868";
+
+  return (
+    <g style={{ cursor: onClick ? "pointer" : "default" }} onClick={onClick || undefined}>
+      <rect x={def.x - 30} y={def.y - 90} width={60} height={148} fill="transparent" pointerEvents="all" />
+      {ringColor && (
+        <ellipse cx={def.x} cy={def.y + 48} rx={ringW} ry={6} fill="none" stroke={ringColor} strokeWidth="3" opacity="0.85" pointerEvents="none">
+          <animate attributeName="opacity" values="0.5;1;0.5" dur="1.2s" repeatCount="indefinite" />
+        </ellipse>
+      )}
+      {visual}
+      <g transform={`translate(${def.x}, ${def.y - 78})`} pointerEvents="none">
+        {[0, 1, 2].map((i) => (
+          <rect key={i} x={-13 + i * 9} y={0} width={7} height={4} rx={1}
+            fill={i < hp ? hpColor : "#1a1a1a"} stroke="#000" strokeWidth="0.6" opacity="0.95" />
+        ))}
+      </g>
+    </g>
+  );
+}
+
+function Soldiers({ p, units, selected, attackable, getClickHandler }) {
+  const renderUnit = (def) => {
+    const u = units[def.id];
+    const isDead = u.hp <= 0;
+    return (
+      <Unit key={def.id} def={def} hp={u.hp} isDead={isDead}
+        isSelected={selected === def.id}
+        isTargetable={attackable.includes(def.id)}
+        onClick={isDead ? null : getClickHandler(def.id)} p={p} />
+    );
+  };
   return (
     <g>
       <g style={{ filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.55))" }}>
-        <FlagBearer x={420} y={970} scale={4.0} faction="union" p={p} />
-        <Soldier x={520} y={974} scale={3.8} faction="union" pose="rifle" delay={0.2} p={p} />
-        <Soldier x={620} y={978} scale={3.6} faction="union" pose="march" delay={0.5} p={p} />
-        <Soldier x={140} y={978} scale={3.4} faction="union" pose="march" delay={0.8} p={p} />
-        <Lincoln x={290} y={950} scale={5.0} p={p} />
+        {UNIT_DEFS.filter((d) => d.faction === "union").map(renderUnit)}
       </g>
       <g style={{ filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.55))" }}>
-        <FlagBearer x={1500} y={970} scale={4.0} faction="confederate" p={p} />
-        <Soldier x={1400} y={974} scale={3.8} facing={-1} faction="confederate" pose="rifle" delay={0.4} p={p} />
-        <Soldier x={1300} y={978} scale={3.6} facing={-1} faction="confederate" pose="march" delay={0.7} p={p} />
-        <Soldier x={1780} y={978} scale={3.4} facing={-1} faction="confederate" pose="march" delay={0.1} p={p} />
-        <Grant x={1630} y={950} scale={5.0} p={p} />
+        {UNIT_DEFS.filter((d) => d.faction === "confederate").map(renderUnit)}
       </g>
     </g>
   );
@@ -943,9 +994,144 @@ function Overlay() {
   );
 }
 
+const btnStyle = (variant) => ({
+  appearance: "none",
+  display: "inline-block",
+  padding: "12px 22px",
+  borderRadius: 8,
+  border: variant === "primary" ? "1px solid #d4a838" : "1px solid rgba(232,216,176,0.3)",
+  background: variant === "primary" ? "rgba(212,168,56,0.18)" : "transparent",
+  color: "#e8d8b0",
+  fontFamily: 'Georgia, "Times New Roman", serif',
+  fontSize: 13,
+  letterSpacing: "0.18em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  textDecoration: "none",
+});
+
+function HUD({ playerSide, turn, status, selected, message }) {
+  const sideName = playerSide === "union" ? "Union" : "Confederate";
+  const turnText = status === "playing"
+    ? (turn === "player"
+        ? (selected ? "Click an enemy to attack" : "Your turn — pick one of your units")
+        : (message || "Enemy turn…"))
+    : "";
+
+  if (status === "won" || status === "lost") {
+    const won = status === "won";
+    return (
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "rgba(8,6,10,0.78)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        color: "#e8d8b0", fontFamily: 'Georgia, "Times New Roman", serif',
+      }}>
+        <div style={{ textAlign: "center", maxWidth: 540, padding: 24 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.4em", textTransform: "uppercase", color: "#d4a838", marginBottom: 16 }}>
+            {won ? "After the Battle" : "The Field is Lost"}
+          </div>
+          <h1 style={{ fontSize: 88, fontWeight: 400, margin: "0 0 12px", lineHeight: 1 }}>
+            {won ? "Victory" : "Defeat"}
+          </h1>
+          <p style={{ fontSize: 18, fontStyle: "italic", opacity: 0.65, margin: "0 0 32px", lineHeight: 1.5 }}>
+            {won ? `The ${sideName} hold the field.` : `The ${sideName} fall back into the smoke.`}
+          </p>
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+            {won ? (
+              <a href="/mississippi-river-forest" style={btnStyle("primary")}>Continue to River →</a>
+            ) : (
+              <button onClick={() => window.location.reload()} style={btnStyle("primary")}>Try Again</button>
+            )}
+            <a href="/" style={btnStyle("secondary")}>Choose Side</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "absolute", top: 24, left: 0, right: 0, textAlign: "center", pointerEvents: "none", fontFamily: 'Georgia, "Times New Roman", serif' }}>
+      <div style={{
+        display: "inline-block", padding: "10px 22px",
+        background: "rgba(10,10,15,0.55)",
+        border: "1px solid rgba(212,168,56,0.3)",
+        borderRadius: 8, color: "#e8d8b0",
+      }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.35em", textTransform: "uppercase", opacity: 0.6 }}>
+          You are the {sideName}
+        </div>
+        <div style={{ fontSize: 15, marginTop: 4, fontStyle: "italic", opacity: 0.92 }}>{turnText}</div>
+      </div>
+    </div>
+  );
+}
+
 function Battlefield() {
   const p = PALETTE;
-  const [parallax, setParallax] = useState({x: 0, y: 0});
+
+  const playerSide = useMemo(() => {
+    try { return localStorage.getItem("civilwar.team") || "union"; }
+    catch (e) { return "union"; }
+  }, []);
+  const enemySide = playerSide === "union" ? "confederate" : "union";
+
+  const [units, setUnits] = useState(() => {
+    const u = {};
+    UNIT_DEFS.forEach((d) => { u[d.id] = { hp: STARTING_HP }; });
+    return u;
+  });
+  const [turn, setTurn] = useState("player");
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState("playing");
+  const [message, setMessage] = useState("");
+
+  const attackable = useMemo(() => {
+    if (!selected || turn !== "player" || status !== "playing") return [];
+    return UNIT_DEFS.filter((d) => d.faction === enemySide && units[d.id].hp > 0).map((d) => d.id);
+  }, [selected, turn, status, units, enemySide]);
+
+  useEffect(() => {
+    if (status !== "playing") return;
+    const playerAlive = UNIT_DEFS.some((d) => d.faction === playerSide && units[d.id].hp > 0);
+    const enemyAlive = UNIT_DEFS.some((d) => d.faction === enemySide && units[d.id].hp > 0);
+    if (!enemyAlive) setStatus("won");
+    else if (!playerAlive) setStatus("lost");
+  }, [units, playerSide, enemySide, status]);
+
+  useEffect(() => {
+    if (turn !== "enemy" || status !== "playing") return;
+    const t = setTimeout(() => {
+      const playerAlive = UNIT_DEFS.filter((d) => d.faction === playerSide && units[d.id].hp > 0);
+      if (playerAlive.length === 0) return;
+      const target = playerAlive[Math.floor(Math.random() * playerAlive.length)];
+      setUnits((prev) => ({ ...prev, [target.id]: { hp: prev[target.id].hp - 1 } }));
+      setMessage("");
+      setTurn("player");
+    }, 1100);
+    return () => clearTimeout(t);
+  }, [turn, status, playerSide]);
+
+  const getClickHandler = (id) => {
+    if (status !== "playing" || turn !== "player") return null;
+    const def = UNIT_DEFS.find((d) => d.id === id);
+    if (!def) return null;
+    if (def.faction === playerSide) {
+      return () => setSelected((prev) => (prev === id ? null : id));
+    }
+    if (selected) {
+      return () => {
+        setUnits((prev) => ({ ...prev, [id]: { hp: prev[id].hp - 1 } }));
+        setSelected(null);
+        setMessage("Enemy turn…");
+        setTurn("enemy");
+      };
+    }
+    return null;
+  };
+
+  const [parallax, setParallax] = useState({ x: 0, y: 0 });
   useEffect(() => {
     const onMove = (e) => {
       const w = window.innerWidth, h = window.innerHeight;
@@ -963,31 +1149,24 @@ function Battlefield() {
         <g style={{ transform: `translate(${parallax.x * -8}px, ${parallax.y * -4}px)` }}>
           <Sky p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -14}px, ${parallax.y * -6}px)` }}>
           <DistantSmoke p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -22}px, ${parallax.y * -8}px)` }}>
           <FarRidge p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -32}px, ${parallax.y * -10}px)` }}>
           <NearRidge p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -50}px, ${parallax.y * -16}px)` }}>
           <SmokeWisps density={SMOKE_DENSITY} p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -42}px, ${parallax.y * -8}px)` }}>
           <Mud p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -60}px, ${parallax.y * -14}px)` }}>
           <ScatteredDebris p={p} />
         </g>
-
         <g style={{ transform: `translate(${parallax.x * -70}px, ${parallax.y * -16}px)` }}>
           <BrokenCannon p={p} />
           <HorseSkeleton p={p} />
@@ -996,14 +1175,13 @@ function Battlefield() {
         </g>
 
         <g style={{ transform: `translate(${parallax.x * -38}px, ${parallax.y * -12}px)` }}>
-          <Soldiers p={p} />
+          <Soldiers p={p} units={units} selected={selected} attackable={attackable} getClickHandler={getClickHandler} />
         </g>
 
-        <g style={{ transform: `translate(${parallax.x * -80}px, ${parallax.y * -18}px)` }}>
+        <g style={{ transform: `translate(${parallax.x * -80}px, ${parallax.y * -18}px)`, pointerEvents: "none" }}>
           <Flames intensity={FLAME_INTENSITY} p={p} />
         </g>
-
-        <g style={{ transform: `translate(${parallax.x * -100}px, ${parallax.y * -22}px)` }}>
+        <g style={{ transform: `translate(${parallax.x * -100}px, ${parallax.y * -22}px)`, pointerEvents: "none" }}>
           <HalfBuriedPistol p={p} />
           <HalfBuriedPistol2 p={p} />
         </g>
@@ -1011,6 +1189,8 @@ function Battlefield() {
         <FogOverlay density={FOG_DENSITY} p={p} />
         <Overlay />
       </svg>
+
+      <HUD playerSide={playerSide} turn={turn} status={status} selected={selected} message={message} />
     </div>
   );
 }

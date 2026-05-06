@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Civil War</title>
+<title>Civil War — Choose Your Side</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   :root {
     --bg: #0a0e1f;
-    --bg-2: #141a32;
     --ink: #e8d8b0;
     --ink-dim: rgba(232, 216, 176, 0.55);
     --gold: #d4a838;
-    --river: #6fa8c0;
-    --ember: #d97a3a;
-    --moon: #f4ecd0;
+    --union: #1f2a4a;
+    --union-hi: #2a3858;
+    --confed: #7a6a48;
+    --confed-hi: #9a8a68;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: Georgia, "Times New Roman", serif; }
@@ -54,78 +54,91 @@
   }
   main {
     width: 100%;
-    max-width: 1100px;
+    max-width: 880px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 28px;
   }
-  .scene {
-    position: relative;
-    display: block;
-    text-decoration: none;
+  .team {
+    appearance: none;
+    background: transparent;
     color: inherit;
-    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
     overflow: hidden;
+    padding: 0;
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  .scene:hover {
+  .team:hover {
     transform: translateY(-4px);
-    border-color: rgba(255,255,255,0.18);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow: 0 16px 50px rgba(0,0,0,0.5);
   }
-  .scene .swatch {
-    height: 140px;
+  .team .swatch {
+    height: 200px;
     position: relative;
-    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 24px;
   }
-  .scene-river .swatch {
+  .team-union .swatch {
     background:
-      radial-gradient(circle at 80% 30%, rgba(255, 244, 200, 0.6) 0%, transparent 30%),
-      linear-gradient(180deg, #5fa8d8 0%, #9fc8e6 50%, #4e8aa6 100%);
+      radial-gradient(circle at 50% 30%, rgba(255,255,255,0.05) 0%, transparent 60%),
+      linear-gradient(160deg, var(--union-hi) 0%, var(--union) 50%, #0e1428 100%);
   }
-  .scene-battlefield .swatch {
+  .team-confederate .swatch {
     background:
-      radial-gradient(ellipse at 60% 100%, rgba(217, 122, 58, 0.7) 0%, transparent 50%),
-      linear-gradient(180deg, #2a1d1a 0%, #5a3522 60%, #a85a2a 100%);
+      radial-gradient(circle at 50% 30%, rgba(255,255,255,0.05) 0%, transparent 60%),
+      linear-gradient(160deg, var(--confed-hi) 0%, var(--confed) 50%, #5a4a30 100%);
   }
-  .scene-slave-grounds .swatch {
-    background:
-      radial-gradient(circle at 25% 35%, rgba(244, 236, 208, 0.55) 0%, transparent 25%),
-      linear-gradient(180deg, #0a0e1f 0%, #141a32 70%, #1a2240 100%);
-  }
-  .scene-slave-grounds .swatch::after {
-    content: "";
+  .flag {
     position: absolute;
-    inset: 0;
-    background-image:
-      radial-gradient(1px 1px at 20% 30%, rgba(255, 238, 208, 0.7), transparent),
-      radial-gradient(1px 1px at 60% 50%, rgba(255, 238, 208, 0.6), transparent),
-      radial-gradient(1px 1px at 80% 20%, rgba(255, 238, 208, 0.8), transparent),
-      radial-gradient(1px 1px at 35% 70%, rgba(255, 238, 208, 0.5), transparent),
-      radial-gradient(1.5px 1.5px at 70% 75%, rgba(255, 238, 208, 0.7), transparent);
+    top: 24px;
+    right: 24px;
+    width: 60px;
+    height: 40px;
   }
-  .scene .body { padding: 20px 22px 22px; }
-  .scene-num {
+  .body { padding: 22px 24px 24px; }
+  .label {
     font-size: 11px;
     letter-spacing: 0.3em;
     color: var(--gold);
-    opacity: 0.75;
-    margin-bottom: 8px;
+    opacity: 0.8;
+    margin-bottom: 6px;
   }
-  .scene h2 {
+  .team h2 {
     margin: 0 0 8px;
     font-weight: 400;
-    font-size: 22px;
-    line-height: 1.2;
+    font-size: 28px;
+    line-height: 1.1;
   }
-  .scene p {
-    margin: 0;
+  .leader {
+    color: var(--ink-dim);
+    font-size: 14px;
+    font-style: italic;
+    margin: 0 0 14px;
+  }
+  .desc {
     color: var(--ink-dim);
     font-size: 14px;
     line-height: 1.5;
+    margin: 0;
   }
+  .cta {
+    margin-top: 18px;
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--ink);
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+  .team:hover .cta { opacity: 1; }
   footer {
     margin-top: 56px;
     color: var(--ink-dim);
@@ -134,42 +147,78 @@
     text-transform: uppercase;
     text-align: center;
   }
+  footer a { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; padding-bottom: 1px; }
+  footer a:hover { color: var(--ink); }
 </style>
 </head>
 <body>
   <header>
     <div class="eyebrow">A Browser Game</div>
     <h1>Civil War</h1>
-    <p class="tagline">Three scenes from a fractured nation — a peaceful river, a battlefield's smoldering aftermath, and the long road north.</p>
+    <p class="tagline">Choose your side. The first battle waits at dusk.</p>
   </header>
 
   <main>
-    <a class="scene scene-river" href="/mississippi-river-forest">
-      <div class="swatch"></div>
-      <div class="body">
-        <div class="scene-num">Scene 01</div>
-        <h2>Mississippi River Forest</h2>
-        <p>Daylight along a clear blue river — deer, herons, fish, a steamboat in the distance.</p>
+    <button class="team team-union" data-team="union">
+      <div class="swatch">
+        <svg class="flag" viewBox="0 0 60 40" aria-hidden="true">
+          <rect x="0" y="0" width="60" height="40" fill="#1f2a4a" />
+          <rect x="24" y="0" width="36" height="3" fill="#c8201f" />
+          <rect x="24" y="6" width="36" height="3" fill="#e8d8a8" />
+          <rect x="24" y="12" width="36" height="3" fill="#c8201f" />
+          <rect x="0" y="18" width="60" height="3" fill="#e8d8a8" />
+          <rect x="0" y="24" width="60" height="3" fill="#c8201f" />
+          <rect x="0" y="30" width="60" height="3" fill="#e8d8a8" />
+          <rect x="0" y="36" width="60" height="3" fill="#c8201f" />
+          <g fill="#e8d8a8">
+            <circle cx="6" cy="6" r="0.8" /><circle cx="12" cy="6" r="0.8" /><circle cx="18" cy="6" r="0.8" />
+            <circle cx="6" cy="11" r="0.8" /><circle cx="12" cy="11" r="0.8" /><circle cx="18" cy="11" r="0.8" />
+          </g>
+        </svg>
       </div>
-    </a>
-    <a class="scene scene-battlefield" href="/civil-war-battlefield">
-      <div class="swatch"></div>
       <div class="body">
-        <div class="scene-num">Scene 02</div>
-        <h2>Civil War Battlefield</h2>
-        <p>Dusk after the battle — broken cannons, mud, flickering flames, Lincoln and Grant on opposite ridges.</p>
+        <div class="label">North</div>
+        <h2>Union</h2>
+        <p class="leader">Led by Abraham Lincoln</p>
+        <p class="desc">Hold the line. Preserve what is whole.</p>
+        <div class="cta">Choose Union →</div>
       </div>
-    </a>
-    <a class="scene scene-slave-grounds" href="/slave-grounds">
-      <div class="swatch"></div>
+    </button>
+
+    <button class="team team-confederate" data-team="confederate">
+      <div class="swatch">
+        <svg class="flag" viewBox="0 0 60 40" aria-hidden="true">
+          <rect x="0" y="0" width="60" height="40" fill="#9a2018" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#1f2a4a" stroke-width="3.5" />
+          <g fill="#e8d8a8">
+            <circle cx="30" cy="20" r="0.9" />
+            <circle cx="20" cy="13.3" r="0.7" /><circle cx="40" cy="13.3" r="0.7" />
+            <circle cx="20" cy="26.7" r="0.7" /><circle cx="40" cy="26.7" r="0.7" />
+          </g>
+        </svg>
+      </div>
       <div class="body">
-        <div class="scene-num">Scene 03</div>
-        <h2>Slave Grounds</h2>
-        <p>Moonlit forest, fireflies, the North Star — silhouettes walking the Underground Railroad.</p>
+        <div class="label">South</div>
+        <h2>Confederate</h2>
+        <p class="leader">Led by Ulysses S. Grant</p>
+        <p class="desc">Take the field. Carry the day.</p>
+        <div class="cta">Choose Confederate →</div>
       </div>
-    </a>
+    </button>
   </main>
 
-  <footer>Alpha · Scenes only · Game logic in progress</footer>
+  <footer>
+    Alpha · <a href="/scenes">Preview scenes</a> · Game logic in progress
+  </footer>
+
+  <script>
+    document.querySelectorAll('.team').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const team = btn.dataset.team;
+        try { localStorage.setItem('civilwar.team', team); } catch (e) {}
+        window.location.href = '/civil-war-battlefield';
+      });
+    });
+  </script>
 </body>
 </html>
