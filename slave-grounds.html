@@ -837,8 +837,8 @@ function SlaveGrounds() {
   const cam = Math.max(0, Math.min(WORLD_W - VIEW_W, player.worldX - VIEW_W / 2));
   const camFar   = cam * 0.05;
   const camMid   = cam * 0.35;
-  const camNear  = cam * 0.75;
-  const camFront = cam * 1.0;
+  const camNear  = cam * 1.0;   // gameplay layer (cages/figures/player) must move with camera
+  const camFront = cam * 1.15;  // foreground trees scroll slightly faster for depth
 
   // Nearest unfreed cage in range — used to highlight + light up the prompt
   const candidateId = useMemo(() => {
