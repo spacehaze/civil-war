@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lake Fortress — Civil War</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; font-family: Georgia, "Times New Roman", serif; }
+  #root { width: 100vw; height: 100vh; }
+
+  @keyframes flagWave {
+    0%, 100% { transform: rotate(-3deg) skewX(-2deg); }
+    50%      { transform: rotate(4deg)  skewX(2deg); }
+  }
+  @keyframes cloudDriftLake {
+    0%   { transform: translateX(-200px); }
+    100% { transform: translateX(2200px); }
+  }
+  @keyframes ripple {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(1px); }
+  }
+  @keyframes cannonRecoil {
+    0%   { transform: translate(0, 0); }
+    20%  { transform: translate(-6px, 2px); }
+    100% { transform: translate(0, 0); }
+  }
+  @keyframes muzzleFlash {
+    0%   { opacity: 1; transform: scale(0.3); }
+    100% { opacity: 0; transform: scale(1.4); }
+  }
+  @keyframes hitFlash {
+    0%   { opacity: 0; }
+    20%  { opacity: 0.7; }
+    100% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+const PALETTE = {
+  skyTop: "#88b8d8",
+  skyMid: "#c8d8e0",
+  skyHaze: "#f4d8a8",
+  sun: "#fff4c8",
+  sunHalo: "#ffe88a",
+  cloud: "#ffffff",
+  cloudShade: "#dde4ea",
+  mountainFar: "#7a8a9a",
+  mountainNear: "#5a6a7a",
+  waterFar: "#7ab0c8",
+  waterNear: "#3e7a98",
+  waterShine: "#e8f4fa",
+  rock: "#5a5048",
+  rockHi: "#9a8e80",
+  rockShade: "#2a2520",
+  fortStone: "#9a8a72",
+  fortStoneHi: "#b8a888",
+  fortStoneShade: "#6a5a48",
+  fortShadow: "#3a3028",
+  cannon: "#2a2a25",
+  cannonHi: "#5a5a48",
+  flagPole: "#3a2818",
+  unionFlag: "#1f2a4a",
+  unionStripe: "#c8201f",
+  unionStar: "#e8d8a8",
+  confedFlag: "#9a2018",
+  confedCross: "#1f2a4a",
+  cannonball: "#0a0a08",
+  fire: "#ff8a3a",
+  smoke: "#dde4ea",
+  boatHull: "#6a4a30",
+  boatHullHi: "#8a6a48",
+  woodMast: "#3a2618",
+  uniformUnion: "#1a2540",
+  uniformConfed: "#7a6a48",
+};
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const VIEW_W = 1920;
+const VIEW_H = 1080;
+const LAKE_Y = 760;          // water surface
+const FORT_BASE_Y = 740;     // top of rock (where fortress sits)
+const FORT_LEFT_X = 280;     // center x of left fortress
+const FORT_RIGHT_X = 1640;   // center x of right fortress
+const FORT_TOP_Y = 470;      // top wall of fortress
+const FORT_HALF_W = 130;     // half-width of fortress for collision
+const CANNON_Y = 460;        // y position of cannon barrel
+const FORT_HP_START = 5;
+
+const CANNON_GRAVITY = 0.55;
+const CANNON_SPEED = 26;
+const CANNON_RADIUS = 10;
+const PLAYER_CANNON_COOLDOWN = 800;
+const ENEMY_CANNON_COOLDOWN = 1700;
+
+const BOAT_SPEED = 1.4;       // px/frame
+const BOAT_HP = 2;            // takes 2 cannonball hits to sink
+const PLAYER_BOAT_COOLDOWN = 4000;
+const ENEMY_BOAT_COOLDOWN = 5500;
+const BOAT_DAMAGE = 1;        // damage to fortress on arrival
+
+const ANGLE_MIN = 18;
+const ANGLE_MAX = 78;
+const ANGLE_STEP = 0.7;       // degrees per frame while ↑/↓ held
+const ANGLE_INITIAL = 50;
+
+// ============================================================================
+// SCENERY COMPONENTS
+// ============================================================================
+function Defs() {
+  return (
+    <defs>
+      <linearGradient id="skyGradLF" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stopColor={PALETTE.skyTop} />
+        <stop offset="65%" stopColor={PALETTE.skyMid} />
+        <stop offset="100%" stopColor={PALETTE.skyHaze} />
+      </linearGradient>
+      <radialGradient id="sunHaloLF" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0%"  stopColor={PALETTE.sunHalo} stopOpacity="0.65" />
+        <stop offset="60%" stopColor={PALETTE.sunHalo} stopOpacity="0.18" />
+        <stop offset="100%" stopColor={PALETTE.sunHalo} stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="waterGradLF" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stopColor={PALETTE.waterFar} />
+        <stop offset="100%" stopColor={PALETTE.waterNear} />
+      </linearGradient>
+      <linearGradient id="fortGradLF" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stopColor={PALETTE.fortStoneHi} />
+        <stop offset="100%" stopColor={PALETTE.fortStoneShade} />
+      </linearGradient>
+      <radialGradient id="muzzle" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0%"  stopColor="#fff8c0" stopOpacity="1" />
+        <stop offset="40%" stopColor={PALETTE.fire} stopOpacity="0.85" />
+        <stop offset="100%" stopColor={PALETTE.fire} stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="vignetteLF" cx="0.5" cy="0.5" r="0.85">
+        <stop offset="60%" stopColor="#000" stopOpacity="0" />
+        <stop offset="100%" stopColor="#000" stopOpacity="0.4" />
+      </radialGradient>
+      <filter id="grainLF">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="9" />
+        <feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.46  0 0 0 0 0.42  0 0 0 0.08 0" />
+        <feComposite in2="SourceGraphic" operator="in" />
+      </filter>
+    </defs>
+  );
+}
+
+function Sky() {
+  return (
+    <g>
+      <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#skyGradLF)" />
+      <circle cx="1500" cy="180" r="240" fill="url(#sunHaloLF)" />
+      <circle cx="1500" cy="180" r="56" fill={PALETTE.sun} />
+      <circle cx="1500" cy="180" r="56" fill="#fff" opacity="0.4" />
+    </g>
+  );
+}
+
+function Clouds() {
+  const clouds = [
+    { x: 200, y: 140, s: 1.0, dur: 110, delay: 0 },
+    { x: 700, y: 100, s: 1.3, dur: 140, delay: 30 },
+    { x: 1100, y: 200, s: 0.8, dur: 90, delay: 60 },
+  ];
+  return (
+    <g>
+      {clouds.map((c, i) => (
+        <g key={i} style={{ animation: `cloudDriftLake ${c.dur}s linear ${c.delay}s infinite` }}>
+          <g transform={`translate(${c.x}, ${c.y}) scale(${c.s})`}>
+            <ellipse cx="-40" cy="6" rx="50" ry="14" fill={PALETTE.cloudShade} />
+            <ellipse cx="-10" cy="-4" rx="44" ry="18" fill={PALETTE.cloud} />
+            <ellipse cx="30" cy="0" rx="56" ry="20" fill={PALETTE.cloud} />
+            <ellipse cx="60" cy="6" rx="36" ry="12" fill={PALETTE.cloudShade} />
+          </g>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function DistantMountains() {
+  return (
+    <g opacity="0.7">
+      <path d="M0,640 L120,540 L240,580 L380,500 L520,560 L660,520 L820,560 L980,510 L1140,570 L1320,530 L1480,580 L1660,540 L1820,580 L1920,560 L1920,720 L0,720 Z" fill={PALETTE.mountainFar} />
+      <path d="M0,680 L160,620 L320,660 L500,610 L680,650 L860,620 L1040,660 L1240,620 L1440,660 L1640,620 L1820,650 L1920,640 L1920,720 L0,720 Z" fill={PALETTE.mountainNear} opacity="0.85" />
+    </g>
+  );
+}
+
+function LakeWater() {
+  return (
+    <g>
+      <rect x="0" y={LAKE_Y} width={VIEW_W} height={VIEW_H - LAKE_Y} fill="url(#waterGradLF)" />
+      {/* horizon ripples */}
+      <g stroke={PALETTE.waterShine} fill="none" opacity="0.55">
+        <path d="M0,790 Q480,786 960,790 T1920,790" strokeWidth="1.4" />
+        <path d="M0,830 Q480,826 960,830 T1920,830" strokeWidth="1.4" opacity="0.7" />
+        <path d="M0,890 Q480,884 960,890 T1920,890" strokeWidth="1.6" opacity="0.7" />
+        <path d="M0,960 Q480,954 960,960 T1920,960" strokeWidth="1.8" opacity="0.7" />
+        <path d="M0,1030 Q480,1024 960,1030 T1920,1030" strokeWidth="2" opacity="0.7" />
+      </g>
+      {/* sun reflection */}
+      <ellipse cx="1500" cy="780" rx="120" ry="6" fill={PALETTE.sun} opacity="0.6" />
+      <ellipse cx="1500" cy="800" rx="80" ry="4" fill={PALETTE.sun} opacity="0.4" />
+      <ellipse cx="1500" cy="820" rx="60" ry="3" fill={PALETTE.sun} opacity="0.3" />
+    </g>
+  );
+}
+
+function RockyIsland({ cx, scale = 1 }) {
+  return (
+    <g transform={`translate(${cx}, ${LAKE_Y})`}>
+      {/* base rock */}
+      <path d={`M${-180*scale},20 Q${-200*scale},10 ${-190*scale},-10 L${-160*scale},-30 L${-100*scale},-44 L${-40*scale},-50 L${40*scale},-52 L${100*scale},-42 L${160*scale},-30 L${190*scale},-12 Q${200*scale},10 ${180*scale},20 L${180*scale},48 L${-180*scale},48 Z`}
+        fill={PALETTE.rock} />
+      {/* highlights */}
+      <path d={`M${-100*scale},-44 L${-60*scale},-48 L${-20*scale},-50 L${30*scale},-52 L${80*scale},-46`} stroke={PALETTE.rockHi} strokeWidth="1.6" fill="none" opacity="0.7" />
+      {/* shadows */}
+      <path d={`M${-180*scale},10 L${-150*scale},20 L${-120*scale},10 L${-80*scale},22 L${-40*scale},14`} stroke={PALETTE.rockShade} strokeWidth="1.4" fill="none" opacity="0.7" />
+      <path d={`M${40*scale},14 L${80*scale},20 L${120*scale},10 L${150*scale},20 L${180*scale},10`} stroke={PALETTE.rockShade} strokeWidth="1.4" fill="none" opacity="0.7" />
+      {/* waterline foam */}
+      <ellipse cx="0" cy="48" rx={195*scale} ry="4" fill={PALETTE.waterShine} opacity="0.7" />
+    </g>
+  );
+}
+
+function Fortress({ side, hp, hitFlashAt, now, children }) {
+  const isLeft = side === "left";
+  const cx = isLeft ? FORT_LEFT_X : FORT_RIGHT_X;
+  const flagFill = isLeft ? PALETTE.unionFlag : PALETTE.confedFlag;
+  const stripeColor = isLeft ? PALETTE.unionStripe : PALETTE.unionStar;
+  const flashing = (now - hitFlashAt) < 350;
+  return (
+    <g transform={`translate(${cx}, ${FORT_BASE_Y})`}>
+      {/* main wall */}
+      <rect x={-FORT_HALF_W} y={-270} width={FORT_HALF_W * 2} height="270" fill="url(#fortGradLF)" />
+      {/* shadow on the side facing away */}
+      <rect x={isLeft ? FORT_HALF_W - 30 : -FORT_HALF_W} y={-270} width="30" height="270" fill={PALETTE.fortShadow} opacity="0.55" />
+      {/* mortar lines (horizontal) */}
+      <g stroke={PALETTE.fortStoneShade} strokeWidth="1" opacity="0.45">
+        <line x1={-FORT_HALF_W} y1="-225" x2={FORT_HALF_W} y2="-225" />
+        <line x1={-FORT_HALF_W} y1="-180" x2={FORT_HALF_W} y2="-180" />
+        <line x1={-FORT_HALF_W} y1="-135" x2={FORT_HALF_W} y2="-135" />
+        <line x1={-FORT_HALF_W} y1="-90"  x2={FORT_HALF_W} y2="-90" />
+        <line x1={-FORT_HALF_W} y1="-45"  x2={FORT_HALF_W} y2="-45" />
+      </g>
+      {/* stone block staggers (vertical) */}
+      <g stroke={PALETTE.fortStoneShade} strokeWidth="0.9" opacity="0.4">
+        <line x1="-90" y1="-225" x2="-90" y2="-180" />
+        <line x1="-30" y1="-225" x2="-30" y2="-180" />
+        <line x1="30"  y1="-225" x2="30"  y2="-180" />
+        <line x1="90"  y1="-225" x2="90"  y2="-180" />
+        <line x1="-60" y1="-180" x2="-60" y2="-135" />
+        <line x1="0"   y1="-180" x2="0"   y2="-135" />
+        <line x1="60"  y1="-180" x2="60"  y2="-135" />
+        <line x1="-90" y1="-135" x2="-90" y2="-90" />
+        <line x1="-30" y1="-135" x2="-30" y2="-90" />
+        <line x1="30"  y1="-135" x2="30"  y2="-90" />
+        <line x1="90"  y1="-135" x2="90"  y2="-90" />
+      </g>
+      {/* windows (3) */}
+      <g fill={PALETTE.fortShadow}>
+        <rect x={-90} y={-110} width="34" height="46" rx="2" />
+        <rect x={-17} y={-110} width="34" height="46" rx="2" />
+        <rect x={56}  y={-110} width="34" height="46" rx="2" />
+        {/* window arches */}
+        <ellipse cx={-73} cy={-110} rx="17" ry="8" />
+        <ellipse cx={0}   cy={-110} rx="17" ry="8" />
+        <ellipse cx={73}  cy={-110} rx="17" ry="8" />
+      </g>
+      {/* crenellations on top */}
+      <g fill={PALETTE.fortStone}>
+        <rect x={-FORT_HALF_W} y={-300} width={FORT_HALF_W * 2} height="30" />
+        {Array.from({ length: 9 }).map((_, i) => (
+          <rect key={i} x={-FORT_HALF_W + 4 + i * 30} y={-322} width="22" height="22" />
+        ))}
+      </g>
+      {/* flag pole + flag */}
+      <g transform={`translate(${isLeft ? -FORT_HALF_W + 12 : FORT_HALF_W - 12}, -322)`}>
+        <line x1="0" y1="0" x2="0" y2="-110" stroke={PALETTE.flagPole} strokeWidth="2.4" />
+        <circle cx="0" cy="-112" r="2" fill={PALETTE.cannonHi} />
+        <g style={{ transformOrigin: "0px -100px", animation: "flagWave 4s ease-in-out infinite" }}>
+          {isLeft ? (
+            <g>
+              <path d={`M0,-100 L48,-96 L52,-72 L48,-50 L0,-54 Z`} fill={flagFill} />
+              <rect x="0" y="-100" width="20" height="22" fill="#1f2a4a" />
+              <g fill="#e8d8a8">
+                <circle cx="4" cy="-95" r="1" /><circle cx="10" cy="-95" r="1" /><circle cx="16" cy="-95" r="1" />
+                <circle cx="4" cy="-87" r="1" /><circle cx="10" cy="-87" r="1" /><circle cx="16" cy="-87" r="1" />
+              </g>
+              <line x1="20" y1="-92" x2="50" y2="-90" stroke={PALETTE.unionStripe} strokeWidth="1.4" />
+              <line x1="20" y1="-83" x2="50" y2="-81" stroke={PALETTE.unionStar} strokeWidth="1.4" />
+              <line x1="0"  y1="-74" x2="50" y2="-72" stroke={PALETTE.unionStripe} strokeWidth="1.4" />
+              <line x1="0"  y1="-65" x2="50" y2="-63" stroke={PALETTE.unionStar} strokeWidth="1.4" />
+              <line x1="0"  y1="-56" x2="48" y2="-54" stroke={PALETTE.unionStripe} strokeWidth="1.4" />
+            </g>
+          ) : (
+            <g>
+              <path d={`M0,-100 L48,-96 L52,-72 L48,-50 L0,-54 Z`} fill={flagFill} />
+              <path d="M0,-100 L48,-50 M48,-96 L0,-54" stroke={PALETTE.confedCross} strokeWidth="3" />
+              <g fill="#e8d8a8">
+                <circle cx="24" cy="-78" r="1.4" />
+                <circle cx="14" cy="-86" r="1" /><circle cx="36" cy="-72" r="1" />
+                <circle cx="36" cy="-86" r="1" /><circle cx="14" cy="-72" r="1" />
+              </g>
+            </g>
+          )}
+        </g>
+      </g>
+      {/* hit flash */}
+      {flashing && (
+        <rect x={-FORT_HALF_W - 8} y={-330} width={FORT_HALF_W * 2 + 16} height="338" fill="#ff6a3a" opacity="0.55" pointerEvents="none" />
+      )}
+      {/* HP pips above the fort */}
+      <g transform="translate(0, -360)" pointerEvents="none">
+        {Array.from({ length: FORT_HP_START }).map((_, i) => (
+          <rect key={i} x={-((FORT_HP_START * 14) / 2) + i * 14} y="0" width="10" height="6" rx="1.5"
+            fill={i < hp ? (isLeft ? "#5a8ad8" : "#d8a868") : "#1a1a1a"}
+            stroke="#000" strokeWidth="0.8" opacity="0.95" />
+        ))}
+      </g>
+      {children}
+    </g>
+  );
+}
+
+function CannonBarrel({ side, angle, recoilAt, now }) {
+  // angle is the elevation in degrees. Visual barrel points "up and outward"
+  const isLeft = side === "left";
+  // For left fortress, barrel points up-right (angle measured from horizontal toward enemy)
+  const facing = isLeft ? 1 : -1;
+  const recoilProgress = Math.min(1, Math.max(0, (now - recoilAt) / 200));
+  const recoilOffset = recoilAt > 0 && recoilProgress < 1
+    ? -8 * facing * (1 - recoilProgress) * Math.sin(recoilProgress * Math.PI)
+    : 0;
+  // Render at fortress top-center
+  return (
+    <g transform={`translate(0, ${CANNON_Y - FORT_BASE_Y})`}>
+      {/* base mount */}
+      <rect x="-22" y="-4" width="44" height="14" fill={PALETTE.cannon} />
+      <circle cx="-16" cy="10" r="6" fill={PALETTE.cannon} />
+      <circle cx="16"  cy="10" r="6" fill={PALETTE.cannon} />
+      {/* barrel — rotates by angle */}
+      <g transform={`translate(${recoilOffset}, 0) rotate(${-angle * facing})`}>
+        <rect x={isLeft ? 0 : -50} y="-7" width="50" height="14" fill={PALETTE.cannon} />
+        <rect x={isLeft ? 8 : -42} y="-8" width="34" height="3" fill={PALETTE.cannonHi} opacity="0.6" />
+        {/* barrel band */}
+        <rect x={isLeft ? 18 : -22} y="-8" width="4" height="16" fill={PALETTE.cannonHi} opacity="0.6" />
+        {/* muzzle */}
+        <ellipse cx={isLeft ? 50 : -50} cy="0" rx="3" ry="7" fill="#000" />
+      </g>
+    </g>
+  );
+}
+
+function MuzzleFlash({ side, angle, t, now }) {
+  // Flash positioned at the barrel tip, in viewport coords (relative to fortress center)
+  const isLeft = side === "left";
+  const facing = isLeft ? 1 : -1;
+  const cx = isLeft ? FORT_LEFT_X : FORT_RIGHT_X;
+  const a = -angle * facing * Math.PI / 180;
+  // Barrel length 50, tip relative to base mount
+  const tipX = cx + Math.cos(a) * 50 * facing;
+  const tipY = (CANNON_Y) + Math.sin(a) * 50 * facing;
+  const elapsed = now - t;
+  if (elapsed > 220) return null;
+  const progress = elapsed / 220;
+  return (
+    <g transform={`translate(${tipX}, ${tipY})`} style={{ pointerEvents: "none" }}>
+      <circle cx="0" cy="0" r={26 * (0.4 + progress * 0.9)} fill="url(#muzzle)" opacity={1 - progress} />
+    </g>
+  );
+}
+
+function Cannonball({ x, y }) {
+  return (
+    <g transform={`translate(${x}, ${y})`} style={{ pointerEvents: "none" }}>
+      <circle cx="0" cy="2" r={CANNON_RADIUS + 2} fill={PALETTE.smoke} opacity="0.4" />
+      <circle cx="0" cy="0" r={CANNON_RADIUS} fill={PALETTE.cannonball} />
+      <circle cx="-3" cy="-3" r="2" fill={PALETTE.cannonHi} opacity="0.7" />
+    </g>
+  );
+}
+
+function Boat({ x, y, side, hp }) {
+  const isLeft = side === "left";
+  const facing = isLeft ? 1 : -1;
+  const uniform = isLeft ? PALETTE.uniformUnion : PALETTE.uniformConfed;
+  return (
+    <g transform={`translate(${x}, ${y}) scale(${facing}, 1)`}>
+      <ellipse cx="0" cy="20" rx="46" ry="4" fill="#000" opacity="0.4" />
+      {/* hull */}
+      <path d="M-44,0 L44,0 L36,18 L-36,18 Z" fill={PALETTE.boatHull} />
+      <path d="M-42,0 Q-44,-3 -36,-4 L36,-4 Q44,-3 42,0 Z" fill={PALETTE.boatHullHi} />
+      {/* mast */}
+      <line x1="0" y1="-4" x2="0" y2="-44" stroke={PALETTE.woodMast} strokeWidth="2.4" />
+      {/* small sail */}
+      <path d="M0,-44 Q22,-30 0,-12 Z" fill="#e8d8a8" opacity="0.85" />
+      {/* two figures */}
+      <g fill={uniform}>
+        <circle cx="-14" cy="-6" r="5" />
+        <rect x="-19" y="-2" width="10" height="10" rx="2" />
+        <circle cx="14" cy="-6" r="5" />
+        <rect x="9" y="-2" width="10" height="10" rx="2" />
+      </g>
+      {/* HP */}
+      <g transform="translate(0, -54)" pointerEvents="none">
+        {Array.from({ length: BOAT_HP }).map((_, i) => (
+          <rect key={i} x={-((BOAT_HP * 9) / 2) + i * 9} y="0" width="6" height="3" rx="1"
+            fill={i < hp ? (isLeft ? "#5a8ad8" : "#d8a868") : "#1a1a1a"} />
+        ))}
+      </g>
+    </g>
+  );
+}
+
+// ============================================================================
+// HUD
+// ============================================================================
+function HUD({ playerSide, status, playerCannonAngle, playerHp, enemyHp, cannonReady, boatReady }) {
+  const sideName = playerSide === "union" ? "Union" : "Confederate";
+  const enemyName = playerSide === "union" ? "Confederate" : "Union";
+
+  if (status === "won" || status === "lost") {
+    const won = status === "won";
+    return (
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "rgba(8,6,10,0.78)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        color: "#e8d8b0", fontFamily: 'Georgia, "Times New Roman", serif',
+      }}>
+        <div style={{ textAlign: "center", maxWidth: 580, padding: 24 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.4em", textTransform: "uppercase", color: "#d4a838", marginBottom: 16 }}>
+            {won ? `The ${enemyName} Fortress Falls` : `The ${sideName} Fortress Falls`}
+          </div>
+          <h1 style={{ fontSize: 88, fontWeight: 400, margin: "0 0 12px", lineHeight: 1 }}>
+            {won ? "Victory" : "Defeat"}
+          </h1>
+          <p style={{ fontSize: 18, fontStyle: "italic", opacity: 0.7, margin: "0 0 32px", lineHeight: 1.5 }}>
+            {won ? "The lake belongs to the brave." : "Smoke rises from the broken walls."}
+          </p>
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={() => window.location.reload()} style={{
+              padding: "12px 22px", borderRadius: 8,
+              border: "1px solid #d4a838", background: "rgba(212,168,56,0.18)",
+              color: "#e8d8b0", fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase",
+              cursor: "pointer", fontFamily: 'Georgia, "Times New Roman", serif',
+            }}>{won ? "Play Again" : "Try Again"}</button>
+            <a href="/" style={{
+              padding: "12px 22px", borderRadius: 8,
+              border: "1px solid rgba(232,216,176,0.3)", background: "transparent",
+              color: "#e8d8b0", fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase",
+              textDecoration: "none",
+            }}>Choose Side</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <React.Fragment>
+      <div style={{ position: "absolute", top: 24, left: 0, right: 0, textAlign: "center", pointerEvents: "none", fontFamily: 'Georgia, "Times New Roman", serif' }}>
+        <div style={{ display: "inline-block", padding: "10px 22px", background: "rgba(10,10,15,0.55)", border: "1px solid rgba(212,168,56,0.3)", borderRadius: 8, color: "#e8d8b0" }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.35em", textTransform: "uppercase", opacity: 0.6 }}>
+            Lake Fortress · You are the {sideName}
+          </div>
+          <div style={{ fontSize: 14, marginTop: 4, fontStyle: "italic", opacity: 0.92 }}>
+            ↑/↓ aim · SPACE fire {cannonReady ? "" : "(reloading)"} · B send boat {boatReady ? "" : "(building)"}
+          </div>
+        </div>
+      </div>
+      {/* Cannon angle gauge bottom-left */}
+      <div style={{ position: "absolute", bottom: 24, left: 24, fontFamily: 'Georgia, "Times New Roman", serif', color: "#e8d8b0", pointerEvents: "none" }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.3em", textTransform: "uppercase", opacity: 0.6, marginBottom: 4 }}>Cannon Angle</div>
+        <div style={{ fontSize: 22, fontVariantNumeric: "tabular-nums" }}>{playerCannonAngle.toFixed(0)}°</div>
+        <div style={{ marginTop: 8, width: 180, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2 }}>
+          <div style={{ width: `${((playerCannonAngle - ANGLE_MIN) / (ANGLE_MAX - ANGLE_MIN)) * 100}%`, height: "100%", background: "#d4a838", borderRadius: 2 }} />
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
+
+// ============================================================================
+// MAIN GAME
+// ============================================================================
+function LakeFortress() {
+  const playerSide = useMemo(() => {
+    try { return localStorage.getItem("civilwar.team") || "union"; }
+    catch (e) { return "union"; }
+  }, []);
+
+  // Player always controls the LEFT fortress; enemy is on RIGHT
+  const playerFortSide = "left";
+  const enemyFortSide = "right";
+
+  const [playerHp, setPlayerHp] = useState(FORT_HP_START);
+  const [enemyHp, setEnemyHp] = useState(FORT_HP_START);
+  const [playerAngle, setPlayerAngle] = useState(ANGLE_INITIAL);
+  const [cannonballs, setCannonballs] = useState([]);   // {id, side, x, y, vx, vy}
+  const [boats, setBoats] = useState([]);               // {id, side, x, y, hp}
+  const [muzzleFlashes, setMuzzleFlashes] = useState([]); // {id, side, angle, t}
+  const [hitFlashes, setHitFlashes] = useState({ left: 0, right: 0 }); // timestamps
+  const [now, setNow] = useState(0);
+  const [status, setStatus] = useState("playing");
+
+  const idCounter = useRef(0);
+  const newId = () => ++idCounter.current;
+
+  const keysRef = useRef({ up: false, down: false });
+  const lastPlayerCannonRef = useRef(-Infinity);
+  const lastEnemyCannonRef = useRef(0);
+  const lastPlayerBoatRef = useRef(-Infinity);
+  const lastEnemyBoatRef = useRef(0);
+
+  // Win/lose detection
+  useEffect(() => {
+    if (status !== "playing") return;
+    if (enemyHp <= 0) setStatus("won");
+    else if (playerHp <= 0) setStatus("lost");
+  }, [playerHp, enemyHp, status]);
+
+  // Helper: spawn a cannonball
+  const fireCannon = (side, angle) => {
+    const isLeft = side === "left";
+    const cx = isLeft ? FORT_LEFT_X : FORT_RIGHT_X;
+    const facing = isLeft ? 1 : -1;
+    // Barrel tip position
+    const a = -angle * facing * Math.PI / 180;
+    const tipX = cx + Math.cos(a) * 50 * facing;
+    const tipY = CANNON_Y + Math.sin(a) * 50 * facing;
+    // Initial velocity: aim from tip toward an arc that lands at typical fortress distance
+    // vx in direction of facing, vy upward
+    const vx = facing * CANNON_SPEED * Math.cos(angle * Math.PI / 180);
+    const vy = -CANNON_SPEED * Math.sin(angle * Math.PI / 180);
+    setCannonballs((prev) => [...prev, { id: newId(), side, x: tipX, y: tipY, vx, vy }]);
+    setMuzzleFlashes((prev) => [...prev, { id: newId(), side, angle, t: performance.now() }].slice(-6));
+  };
+
+  // Helper: spawn a boat
+  const sendBoat = (side) => {
+    const isLeft = side === "left";
+    const startX = isLeft ? FORT_LEFT_X + 200 : FORT_RIGHT_X - 200;
+    const y = LAKE_Y + 60;
+    setBoats((prev) => [...prev, { id: newId(), side, x: startX, y, hp: BOAT_HP }]);
+  };
+
+  // Keyboard input
+  useEffect(() => {
+    const onDown = (e) => {
+      if (e.key === "ArrowUp")    { keysRef.current.up = true; e.preventDefault(); }
+      else if (e.key === "ArrowDown")  { keysRef.current.down = true; e.preventDefault(); }
+      else if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (status !== "playing") return;
+        const t = performance.now();
+        if (t - lastPlayerCannonRef.current >= PLAYER_CANNON_COOLDOWN) {
+          lastPlayerCannonRef.current = t;
+          fireCannon("left", playerAngle);
+        }
+      }
+      else if (e.key === "b" || e.key === "B") {
+        e.preventDefault();
+        if (status !== "playing") return;
+        const t = performance.now();
+        if (t - lastPlayerBoatRef.current >= PLAYER_BOAT_COOLDOWN) {
+          lastPlayerBoatRef.current = t;
+          sendBoat("left");
+        }
+      }
+    };
+    const onUp = (e) => {
+      if (e.key === "ArrowUp")   keysRef.current.up = false;
+      else if (e.key === "ArrowDown") keysRef.current.down = false;
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, [status, playerAngle]);
+
+  // Animation loop: angle update + projectile physics + AI
+  useEffect(() => {
+    if (status !== "playing") return;
+    let raf;
+    // Initialize enemy cooldowns so they don't fire on frame 1
+    if (lastEnemyCannonRef.current === 0) lastEnemyCannonRef.current = performance.now() + 1500;
+    if (lastEnemyBoatRef.current === 0)   lastEnemyBoatRef.current   = performance.now() + 4000;
+    const tick = (t) => {
+      setNow(t);
+
+      // Player aim angle update
+      setPlayerAngle((prev) => {
+        const dy = (keysRef.current.up ? 1 : 0) - (keysRef.current.down ? 1 : 0);
+        if (dy === 0) return prev;
+        return Math.max(ANGLE_MIN, Math.min(ANGLE_MAX, prev + dy * ANGLE_STEP));
+      });
+
+      // Cannonball physics + collision
+      setCannonballs((prev) => {
+        const next = [];
+        for (const c of prev) {
+          const nx = c.x + c.vx;
+          const ny = c.y + c.vy;
+          const nvy = c.vy + CANNON_GRAVITY;
+          // Land in water?
+          if (ny > LAKE_Y - 4) continue;
+          // Off screen?
+          if (nx < -40 || nx > VIEW_W + 40) continue;
+          // Hit enemy fortress (player's cannonballs only damage enemy; enemy's only damage player)
+          const targetSide = c.side === "left" ? "right" : "left";
+          const targetCx = targetSide === "left" ? FORT_LEFT_X : FORT_RIGHT_X;
+          if (Math.abs(nx - targetCx) < FORT_HALF_W && ny > FORT_TOP_Y - 30 && ny < FORT_BASE_Y) {
+            // Hit fortress
+            if (targetSide === "left") {
+              setPlayerHp((h) => Math.max(0, h - 1));
+              setHitFlashes((f) => ({ ...f, left: t }));
+            } else {
+              setEnemyHp((h) => Math.max(0, h - 1));
+              setHitFlashes((f) => ({ ...f, right: t }));
+            }
+            continue;
+          }
+          // Hit a boat?
+          let boatHit = false;
+          setBoats((bs) => {
+            const out = [];
+            for (const b of bs) {
+              if (!boatHit && b.side === targetSide && Math.abs(b.x - nx) < 50 && Math.abs(b.y - ny) < 24) {
+                boatHit = true;
+                if (b.hp - 1 > 0) out.push({ ...b, hp: b.hp - 1 });
+                // sunk -> drop
+              } else out.push(b);
+            }
+            return out;
+          });
+          if (boatHit) continue;
+          next.push({ ...c, x: nx, y: ny, vy: nvy });
+        }
+        return next;
+      });
+
+      // Boat movement + collision with enemy fortress
+      setBoats((prev) => {
+        const next = [];
+        for (const b of prev) {
+          const dir = b.side === "left" ? 1 : -1;
+          const nx = b.x + dir * BOAT_SPEED;
+          const targetCx = b.side === "left" ? FORT_RIGHT_X : FORT_LEFT_X;
+          const dist = Math.abs(nx - targetCx);
+          if (dist < FORT_HALF_W + 20) {
+            // Boat reaches enemy fortress
+            if (b.side === "left") {
+              setEnemyHp((h) => Math.max(0, h - BOAT_DAMAGE));
+              setHitFlashes((f) => ({ ...f, right: t }));
+            } else {
+              setPlayerHp((h) => Math.max(0, h - BOAT_DAMAGE));
+              setHitFlashes((f) => ({ ...f, left: t }));
+            }
+            continue;
+          }
+          next.push({ ...b, x: nx });
+        }
+        return next;
+      });
+
+      // Enemy AI: cannons + boats
+      if (t - lastEnemyCannonRef.current >= ENEMY_CANNON_COOLDOWN) {
+        lastEnemyCannonRef.current = t;
+        const enemyAngle = 40 + Math.random() * 25; // 40°-65°
+        fireCannon("right", enemyAngle);
+      }
+      if (t - lastEnemyBoatRef.current >= ENEMY_BOAT_COOLDOWN) {
+        lastEnemyBoatRef.current = t;
+        sendBoat("right");
+      }
+
+      // Trim old muzzle flashes
+      setMuzzleFlashes((prev) => prev.filter((m) => t - m.t < 300));
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [status]);
+
+  const cannonReady = (now - lastPlayerCannonRef.current) >= PLAYER_CANNON_COOLDOWN;
+  const boatReady   = (now - lastPlayerBoatRef.current)   >= PLAYER_BOAT_COOLDOWN;
+  const enemyAngleDisplay = 50; // visual only — enemy barrel held at fixed angle for simplicity
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000", overflow: "hidden", userSelect: "none" }}>
+      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+        <Defs />
+        <Sky />
+        <Clouds />
+        <DistantMountains />
+        <LakeWater />
+
+        {/* Boats — drawn under fortresses so they don't overlap walls */}
+        {boats.map((b) => <Boat key={b.id} x={b.x} y={b.y} side={b.side} hp={b.hp} />)}
+
+        {/* Rocky islands */}
+        <RockyIsland cx={FORT_LEFT_X} />
+        <RockyIsland cx={FORT_RIGHT_X} />
+
+        {/* Fortresses */}
+        <Fortress side="left"  hp={playerHp} hitFlashAt={hitFlashes.left}  now={now}>
+          <CannonBarrel side="left"  angle={playerAngle}        recoilAt={lastPlayerCannonRef.current} now={now} />
+        </Fortress>
+        <Fortress side="right" hp={enemyHp} hitFlashAt={hitFlashes.right} now={now}>
+          <CannonBarrel side="right" angle={enemyAngleDisplay}  recoilAt={lastEnemyCannonRef.current}  now={now} />
+        </Fortress>
+
+        {/* Cannonballs on top */}
+        {cannonballs.map((c) => <Cannonball key={c.id} x={c.x} y={c.y} />)}
+
+        {/* Muzzle flashes */}
+        {muzzleFlashes.map((m) => (
+          <MuzzleFlash key={m.id} side={m.side} angle={m.angle} t={m.t} now={now} />
+        ))}
+
+        {/* Vignette + grain */}
+        <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#vignetteLF)" pointerEvents="none" />
+        <rect x="0" y="0" width={VIEW_W} height={VIEW_H} filter="url(#grainLF)" opacity="0.35" pointerEvents="none" />
+      </svg>
+
+      <HUD playerSide={playerSide} status={status} playerCannonAngle={playerAngle}
+        playerHp={playerHp} enemyHp={enemyHp} cannonReady={cannonReady} boatReady={boatReady} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<LakeFortress />);
+  </script>
+</body>
+</html>
